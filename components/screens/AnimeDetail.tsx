@@ -37,8 +37,7 @@ export function AnimeDetail({ id }: { id: number }) {
         </div>
 
         {anime.description && (
-          <p className="mt-4 text-sm leading-relaxed text-white/70"
-            dangerouslySetInnerHTML={{ __html: anime.description }} />
+          <p className="mt-4 text-sm leading-relaxed text-white/70">{anime.description}</p>
         )}
 
         <AiPanel anime={anime} />

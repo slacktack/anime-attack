@@ -7,14 +7,29 @@ export const runtime = "nodejs";
 
 const BodySchema = z.object({
   task: z.enum(["summary", "catchup", "chat", "character", "recommend"]),
-  animeTitle: z.string().min(1),
-  ceiling: z.number().int().nonnegative(),
-  question: z.string().optional(),
-  characterName: z.string().optional(),
-  context: z.string().optional(),
+  animeTitle: z.string().min(1).max(200),
+  ceiling: z.number().int().nonnegative().max(100000),
+  question: z.string().max(1000).optional(),
+  characterName: z.string().max(200).optional(),
+  context: z.string().max(5000).optional(),
 });
 
+function isSameOrigin(req: Request): boolean {
+  const originHeader = req.headers.get("origin");
+  const refererHeader = req.headers.get("referer");
+  const source = originHeader ?? refererHeader;
+  if (!source) return true;
+  try {
+    const sourceHost = new URL(source).host;
+    const targetHost = new URL(req.url).host;
+    return sourceHost === targetHost;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const parsed = BodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid body" }, { status: 400 });
   try {
