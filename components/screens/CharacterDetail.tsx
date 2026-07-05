@@ -1,12 +1,14 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { Heart, Sparkles, Lightbulb, HelpCircle } from "lucide-react";
 import { getCharacterFull } from "@/lib/anime/anilist-extra";
 import { useAi } from "@/lib/ai/useAi";
 import { htmlToText } from "@/lib/ui/htmlToText";
 import { HeroBackdrop } from "@/components/ui/HeroBackdrop";
 import { Carousel } from "@/components/ui/Carousel";
 import { PosterCard } from "@/components/ui/PosterCard";
+import { AiReport } from "@/components/ui/AiReport";
 
 const DESCRIPTION_CLAMP = 400;
 
@@ -60,8 +62,8 @@ export function CharacterDetail({ id }: { id: number }) {
               {character.age && (
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium">Age: {character.age}</span>
               )}
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-accent-crimson">
-                ♥ {character.favourites}
+              <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-accent-crimson">
+                <Heart size={14} color="currentColor" fill="currentColor" /> {character.favourites}
               </span>
             </div>
           </div>
@@ -93,27 +95,28 @@ export function CharacterDetail({ id }: { id: number }) {
       )}
 
       <section className="mx-4 mt-6 rounded-3xl border border-accent-purple/30 bg-gradient-to-b from-accent-purple/10 to-transparent p-4">
-        <h2 className="mb-3 text-lg font-bold">
-          ✨ AI Companion <span className="text-xs font-normal text-white/40">(spoiler-safe)</span>
+        <h2 className="mb-3 flex items-center gap-1.5 text-lg font-bold">
+          <Sparkles size={18} color="currentColor" /> AI Companion{" "}
+          <span className="text-xs font-normal text-white/40">(spoiler-safe)</span>
         </h2>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => askFresh({ task: "character" })}
-            className="min-h-11 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
           >
-            Summary
+            <Sparkles size={16} color="currentColor" /> Summary
           </button>
           <button
             onClick={() => askFresh({ task: "charfacts" })}
-            className="min-h-11 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
           >
-            Fun facts
+            <Lightbulb size={16} color="currentColor" /> Fun facts
           </button>
           <button
             onClick={() => askFresh({ task: "charquiz" })}
-            className="min-h-11 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
           >
-            Quiz
+            <HelpCircle size={16} color="currentColor" /> Quiz
           </button>
         </div>
         <form
@@ -133,7 +136,11 @@ export function CharacterDetail({ id }: { id: number }) {
         </form>
         {loading && <p className="mt-3 animate-pulse text-sm text-white/40">Thinking…</p>}
         {error && <p className="mt-3 text-sm text-accent-crimson">AI is temporarily unavailable. Please try again.</p>}
-        {text && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-white/80">{text}</p>}
+        {text && (
+          <div className="mt-3">
+            <AiReport text={text} />
+          </div>
+        )}
       </section>
     </div>
   );

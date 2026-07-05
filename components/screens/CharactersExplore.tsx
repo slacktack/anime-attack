@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import Link from "next/link";
+import { Heart } from "lucide-react";
 import { browseCharacters } from "@/lib/anime/anilist-extra";
 import { useDebounce } from "@/lib/ui/useDebounce";
 import { Card3D } from "@/components/ui/Card3D";
@@ -42,7 +43,9 @@ export function CharactersExplore() {
               />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2">
                 <p className="line-clamp-2 text-xs font-semibold">{c.name}</p>
-                <p className="text-[10px] text-accent-crimson">♥ {c.favourites}</p>
+                <p className="flex items-center gap-1 text-[10px] text-accent-crimson">
+                  <Heart size={11} color="currentColor" fill="currentColor" /> {c.favourites}
+                </p>
               </div>
             </Card3D>
           </Link>

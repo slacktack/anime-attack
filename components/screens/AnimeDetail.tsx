@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getAnimeDetails, getCharacters, getRecommendations } from "@/lib/anime/anilist";
 import { getAnimeExtras } from "@/lib/anime/anilist-extra";
@@ -29,7 +30,9 @@ export function AnimeDetail({ id }: { id: number }) {
           <img src={anime.cover} alt={anime.title} className="h-56 w-40 rounded-2xl object-cover shadow-xl" />
           <div className="flex flex-col justify-end">
             <h1 className="text-2xl font-black">{anime.title}</h1>
-            <p className="text-sm text-accent-gold">★ {anime.score ?? "–"} · {anime.type ?? ""} · {anime.episodes ?? "?"} eps</p>
+            <p className="flex items-center gap-1 text-sm text-accent-gold">
+              <Star size={14} color="currentColor" fill="currentColor" /> {anime.score ?? "–"} · {anime.type ?? ""} · {anime.episodes ?? "?"} eps
+            </p>
             <div className="mt-1 flex flex-wrap gap-1">
               {anime.genres.slice(0, 4).map((g) => <span key={g} className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{g}</span>)}
             </div>

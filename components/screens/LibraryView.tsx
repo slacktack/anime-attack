@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Heart } from "lucide-react";
 import { getFavorites, getContinueWatching } from "@/lib/storage/store";
 import { PosterCard } from "@/components/ui/PosterCard";
 import { Carousel } from "@/components/ui/Carousel";
@@ -19,7 +20,11 @@ export function LibraryView() {
       </div>
       {cw.length > 0 && <Carousel title="Continue Watching">{cw.map((p) => <PosterCard key={p.anime.id} anime={p.anime} />)}</Carousel>}
       <h2 className="mb-3 mt-4 px-4 text-lg font-bold">Favorites</h2>
-      {favs.length === 0 ? <p className="px-4 text-sm text-white/40">No favorites yet — tap ❤️ on any anime.</p> : (
+      {favs.length === 0 ? (
+        <p className="flex items-center gap-1 px-4 text-sm text-white/40">
+          No favorites yet — tap <Heart size={14} color="currentColor" fill="currentColor" className="text-accent-crimson" /> on any anime.
+        </p>
+      ) : (
         <div className="grid grid-cols-3 gap-3 px-4 sm:grid-cols-4 md:grid-cols-6">{favs.map((a) => <PosterCard key={a.id} anime={a} />)}</div>
       )}
     </div>

@@ -22,10 +22,10 @@ export function ScrollScene({
 
   const opacity = useTransform(
     scrollYProgress,
-    [0, 0.15, 0.85, 1],
-    [0, 1, 1, 0]
+    [0, 0.8, 1],
+    [1, 1, 0]
   );
-  const scale = useTransform(scrollYProgress, [0, 0.3], [1.1, 1]);
+  const scale = useTransform(scrollYProgress, [0, 0.2], [1.05, 1]);
   const y = useTransform(scrollYProgress, [0, 1], [40, -40]);
 
   if (reduced) {

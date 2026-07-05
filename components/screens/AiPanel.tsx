@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Sparkles, FastForward, Wand2, ArrowUp } from "lucide-react";
 import { useAi } from "@/lib/ai/useAi";
 import { getSpoilerCeiling } from "@/lib/storage/store";
 import type { Anime } from "@/lib/anime/types";
+import { AiReport } from "@/components/ui/AiReport";
 
 export function AiPanel({ anime }: { anime: Anime }) {
   const { text, loading, error, ask } = useAi();
@@ -40,7 +42,7 @@ export function AiPanel({ anime }: { anime: Anime }) {
       <div className="relative flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent-purple to-accent-blue text-sm shadow-lg shadow-accent-purple/30">
-            ✨
+            <Sparkles size={18} color="currentColor" />
           </span>
           <h2 className="text-lg font-bold">AI Companion</h2>
         </div>
@@ -54,19 +56,19 @@ export function AiPanel({ anime }: { anime: Anime }) {
           onClick={() => askFresh({ ...base, task: "summary" })}
           className="flex min-h-11 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm font-medium transition-colors hover:bg-white/10"
         >
-          <span>✨</span> AI Summary
+          <Sparkles size={18} color="currentColor" /> AI Summary
         </button>
         <button
           onClick={() => askFresh({ ...base, task: "catchup" })}
           className="flex min-h-11 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm font-medium transition-colors hover:bg-white/10"
         >
-          <span>⏩</span> Catch me up
+          <FastForward size={18} color="currentColor" /> Catch me up
         </button>
         <button
           onClick={() => askFresh({ ...base, task: "recommend" })}
           className="flex min-h-11 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm font-medium transition-colors hover:bg-white/10"
         >
-          <span>✦</span> Recommend
+          <Wand2 size={18} color="currentColor" /> Recommend
         </button>
       </div>
 
@@ -88,7 +90,7 @@ export function AiPanel({ anime }: { anime: Anime }) {
           aria-label="Send"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-purple to-accent-blue text-lg font-semibold shadow-lg shadow-accent-purple/30 transition-transform active:scale-95"
         >
-          ↑
+          <ArrowUp size={20} color="currentColor" />
         </button>
       </form>
 
@@ -103,8 +105,8 @@ export function AiPanel({ anime }: { anime: Anime }) {
         <p className="relative mt-3 text-sm text-accent-crimson">AI is temporarily unavailable. Please try again.</p>
       )}
       {text && (
-        <div className="relative mt-3 rounded-2xl bg-black/30 p-4">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/85">{text}</p>
+        <div className="relative mt-3">
+          <AiReport text={text} />
         </div>
       )}
     </section>

@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Home, Search, Compass, Drama, Library, type LucideIcon } from "lucide-react";
 
-const items = [
-  { href: "/", label: "Home", icon: "🏠" },
-  { href: "/search", label: "Search", icon: "🔍" },
-  { href: "/browse", label: "Browse", icon: "🧭" },
-  { href: "/characters", label: "Characters", icon: "🎭" },
-  { href: "/library", label: "Library", icon: "📚" },
+const items: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/", label: "Home", Icon: Home },
+  { href: "/search", label: "Search", Icon: Search },
+  { href: "/browse", label: "Browse", Icon: Compass },
+  { href: "/characters", label: "Characters", Icon: Drama },
+  { href: "/library", label: "Library", Icon: Library },
 ];
 
 export function BottomNav() {
@@ -21,7 +22,7 @@ export function BottomNav() {
             <Link key={it.href} href={it.href}
               className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 min-h-11 text-[10px] leading-none transition-colors ${active ? "text-accent-purple" : "text-white/50"}`}>
               <span className={`h-1 w-1 rounded-full transition-colors ${active ? "bg-accent-purple" : "bg-transparent"}`} />
-              <span className="text-lg leading-none">{it.icon}</span>
+              <it.Icon size={20} color="currentColor" strokeWidth={2} />
               <span className="whitespace-nowrap">{it.label}</span>
             </Link>
           );
