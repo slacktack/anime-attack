@@ -12,7 +12,7 @@
 
 - Language: TypeScript, `strict: true`. No `any` in committed code (use `unknown` + narrowing).
 - Node 20+. Package manager: npm.
-- Gemini key is read ONLY server-side from `process.env.GEMINI_API_KEY`. Never import it in a client component or expose via `NEXT_PUBLIC_`.
+- Gemini keys are read ONLY server-side. A pool `process.env.GEMINI_API_KEYS` (comma-separated) is preferred; `process.env.GEMINI_API_KEY` is a single-key fallback. Never import either in a client component or expose via `NEXT_PUBLIC_`. Keys live only in gitignored `.env.local`.
 - No video streaming, no auth, no database in this plan (v1 scope).
 - Colors: base `#080808` / `#121212` / `#1C1C1C`; accents purple `#7C3AED`, blue `#3B82F6`, crimson `#DC2626`, gold `#F59E0B`.
 - All animation must respect `prefers-reduced-motion`. Animate transform/opacity only.
@@ -703,28 +703,56 @@ git add lib/ai/prompts.ts lib/ai/prompts.test.ts && git commit -m "feat: add spo
 **Interfaces:**
 - Consumes: `buildPrompt` (Task 7).
 - Produces:
-  - `callGemini(system: string, user: string): Promise<string>` (server-only; reads `GEMINI_API_KEY`).
+  - `getKeyPool(): string[]` — parses `GEMINI_API_KEYS` (comma-separated, trimmed, empties dropped); falls back to `[GEMINI_API_KEY]` if the pool is empty; returns `[]` if neither is set.
+  - `callGemini(system: string, user: string): Promise<string>` (server-only). Rotates round-robin through the key pool and, on a quota/rate-limit response (HTTP 429) or 5xx, fails over to the next key. Throws only when the pool is empty or ALL keys fail. Round-robin cursor is a module-level counter (no `Date.now`/`Math.random`).
   - `POST /api/ai` accepting JSON `{ task, animeTitle, ceiling, question?, characterName?, context? }`, returning `{ text: string }`. Validates body with a Zod schema; 400 on invalid, 500 on Gemini failure.
 
 - [ ] **Step 1: Write the failing test** (`callGemini` with mocked fetch)
 
 ```ts
 import { afterEach, expect, test, vi } from "vitest";
-import { callGemini } from "./gemini";
+import { callGemini, getKeyPool } from "./gemini";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
+test("getKeyPool parses comma-separated pool and trims", () => {
+  vi.stubEnv("GEMINI_API_KEYS", " a , b ,, c ");
+  vi.stubEnv("GEMINI_API_KEY", "");
+  expect(getKeyPool()).toEqual(["a", "b", "c"]);
+});
+
+test("getKeyPool falls back to single key", () => {
+  vi.stubEnv("GEMINI_API_KEYS", "");
+  vi.stubEnv("GEMINI_API_KEY", "solo");
+  expect(getKeyPool()).toEqual(["solo"]);
+});
+
 test("callGemini returns concatenated text", async () => {
-  vi.stubEnv("GEMINI_API_KEY", "k");
+  vi.stubEnv("GEMINI_API_KEYS", "k");
+  vi.stubEnv("GEMINI_API_KEY", "");
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
     candidates: [{ content: { parts: [{ text: "Hello" }, { text: " world" }] } }],
   }), { status: 200 })));
   expect(await callGemini("sys", "hi")).toBe("Hello world");
 });
 
-test("callGemini throws without key", async () => {
+test("callGemini fails over to next key on 429", async () => {
+  vi.stubEnv("GEMINI_API_KEYS", "bad,good");
   vi.stubEnv("GEMINI_API_KEY", "");
-  await expect(callGemini("s", "u")).rejects.toThrow(/GEMINI_API_KEY/);
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(new Response("quota", { status: 429 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: "ok" }] } }],
+    }), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  expect(await callGemini("s", "u")).toBe("ok");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test("callGemini throws when pool empty", async () => {
+  vi.stubEnv("GEMINI_API_KEYS", "");
+  vi.stubEnv("GEMINI_API_KEY", "");
+  await expect(callGemini("s", "u")).rejects.toThrow(/no gemini/i);
 });
 ```
 
@@ -736,11 +764,21 @@ Run: `npx vitest run lib/ai/gemini.test.ts` → Expected: FAIL.
 
 ```ts
 const MODEL = "gemini-2.5-flash";
-type Rec = Record<string, any>;
+type Rec = Record<string, unknown>;
 
-export async function callGemini(system: string, user: string): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY is not set");
+// Round-robin cursor across the key pool. Module-level so it survives between
+// requests in the same server process; no Date.now/Math.random (test-safe).
+let cursor = 0;
+
+export function getKeyPool(): string[] {
+  const pool = (process.env.GEMINI_API_KEYS ?? "")
+    .split(",").map((k) => k.trim()).filter(Boolean);
+  if (pool.length > 0) return pool;
+  const solo = (process.env.GEMINI_API_KEY ?? "").trim();
+  return solo ? [solo] : [];
+}
+
+async function tryKey(key: string, system: string, user: string): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
   const res = await fetch(url, {
     method: "POST",
@@ -752,9 +790,26 @@ export async function callGemini(system: string, user: string): Promise<string> 
     }),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const json = (await res.json()) as Rec;
+  const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const parts = json?.candidates?.[0]?.content?.parts ?? [];
-  return parts.map((p: Rec) => p.text ?? "").join("").trim();
+  return parts.map((p) => p.text ?? "").join("").trim();
+}
+
+export async function callGemini(system: string, user: string): Promise<string> {
+  const pool = getKeyPool();
+  if (pool.length === 0) throw new Error("No Gemini API keys configured");
+  const start = cursor % pool.length;
+  cursor = (cursor + 1) % pool.length;
+  let lastErr: unknown;
+  for (let i = 0; i < pool.length; i++) {
+    const key = pool[(start + i) % pool.length];
+    try {
+      return await tryKey(key, system, user);
+    } catch (err) {
+      lastErr = err; // quota/429/5xx or network — advance to the next key
+    }
+  }
+  throw new Error(`All Gemini keys failed: ${String(lastErr)}`);
 }
 ```
 
