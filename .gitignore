@@ -44,3 +44,4 @@ next-env.d.ts
 # Local key harvest file — never commit
 keys-tester.js
 .claude/
+.commandcode/
