@@ -1,12 +1,49 @@
+import Link from "next/link";
 import { HomeCarousels } from "@/components/screens/HomeCarousels";
+import { QuoteWidget } from "@/components/screens/QuoteWidget";
+import { AuroraBackdrop } from "@/components/ui/AuroraBackdrop";
+import { ScrollScene } from "@/components/ui/ScrollScene";
+import { Parallax } from "@/components/ui/Parallax";
+
+const QUICK_LINKS = [
+  { href: "/browse", label: "Browse", emoji: "🧭" },
+  { href: "/characters", label: "Characters", emoji: "🎭" },
+  { href: "/schedule", label: "Schedule", emoji: "📅" },
+];
 
 export default function HomePage() {
   return (
-    <main className="pt-8">
-      <header className="mb-6 px-4">
-        <p className="text-sm text-white/50">Good Evening 👋</p>
-        <h1 className="text-2xl font-black tracking-tight">Anime Companion</h1>
-      </header>
+    <main className="pt-0">
+      <ScrollScene heightVh={160} className="relative flex min-h-screen w-full flex-col items-center justify-center px-4 text-center">
+        <AuroraBackdrop tint="#7C3AED" />
+        <Parallax speed={1.2} className="flex flex-col items-center">
+          <p className="mb-3 text-sm text-white/50">Good Evening 👋</p>
+          <h1 className="text-gradient text-4xl font-black tracking-tight sm:text-6xl">
+            Anime Companion
+          </h1>
+          <p className="mt-4 max-w-xs text-sm text-white/60 sm:max-w-md sm:text-base">
+            Your cinematic guide to everything anime — track, discover, and dive in.
+          </p>
+        </Parallax>
+      </ScrollScene>
+
+      <nav className="no-scrollbar -mx-4 mb-6 flex gap-3 overflow-x-auto px-4">
+        {QUICK_LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/85 backdrop-blur transition active:scale-95"
+          >
+            <span aria-hidden>{link.emoji}</span>
+            {link.label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="mb-6">
+        <QuoteWidget />
+      </div>
+
       <HomeCarousels />
     </main>
   );

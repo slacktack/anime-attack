@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getCharacterFull } from "@/lib/anime/anilist-extra";
 import { useAi } from "@/lib/ai/useAi";
+import { htmlToText } from "@/lib/ui/htmlToText";
 import { HeroBackdrop } from "@/components/ui/HeroBackdrop";
 import { Carousel } from "@/components/ui/Carousel";
 import { PosterCard } from "@/components/ui/PosterCard";
@@ -27,7 +28,7 @@ export function CharacterDetail({ id }: { id: number }) {
   }
 
   const animeTitle = character.media[0]?.title ?? "this series";
-  const description = character.description ?? "";
+  const description = htmlToText(character.description);
   const isLong = description.length > DESCRIPTION_CLAMP;
   const shownDescription = !isLong || expanded ? description : `${description.slice(0, DESCRIPTION_CLAMP)}…`;
 

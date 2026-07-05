@@ -39,3 +39,14 @@ body {
 }
 ::-webkit-scrollbar { display: none; }
 body { -webkit-tap-highlight-color: transparent; }
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--color-accent-purple), var(--color-accent-blue), var(--color-accent-crimson));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
