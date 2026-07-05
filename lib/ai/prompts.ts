@@ -1,4 +1,11 @@
-export type AiTask = "summary" | "catchup" | "chat" | "character" | "recommend";
+export type AiTask =
+  | "summary"
+  | "catchup"
+  | "chat"
+  | "character"
+  | "charfacts"
+  | "charquiz"
+  | "recommend";
 
 interface PromptInput {
   task: AiTask;
@@ -30,7 +37,9 @@ export function buildPrompt(input: PromptInput): { system: string; user: string 
       case "summary": return `Give a 1-line hook, then a short spoiler-safe summary of "${animeTitle}".`;
       case "catchup": return `Recap the story of "${animeTitle}" so far, so I can jump back in.`;
       case "chat": return question ?? "Tell me something interesting.";
-      case "character": return `Explain the character ${characterName ?? "(unknown)"} from "${animeTitle}": who they are, their role, powers, and key relationships.`;
+      case "character": return `Explain the character ${characterName ?? "(unknown)"} from "${animeTitle}": who they are, their role, personality, powers/abilities, and key relationships. Keep it spoiler-safe.`;
+      case "charfacts": return `Give 5 fun, surprising trivia facts about the character ${characterName ?? "(unknown)"} from "${animeTitle}". Format as a short bulleted list. Keep every fact spoiler-safe.`;
+      case "charquiz": return `Write 3 fun quiz questions about the character ${characterName ?? "(unknown)"} from "${animeTitle}". After all questions, add an "Answers:" section. Keep questions and answers spoiler-safe.`;
       case "recommend": return `Recommend 5 anime I'd like based on "${animeTitle}", each with a one-line reason.`;
     }
   })();

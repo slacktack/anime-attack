@@ -6,7 +6,7 @@ import { callGemini } from "@/lib/ai/gemini";
 export const runtime = "nodejs";
 
 const BodySchema = z.object({
-  task: z.enum(["summary", "catchup", "chat", "character", "recommend"]),
+  task: z.enum(["summary", "catchup", "chat", "character", "charfacts", "charquiz", "recommend"]),
   animeTitle: z.string().min(1).max(200),
   ceiling: z.number().int().nonnegative().max(100000),
   question: z.string().max(1000).optional(),
