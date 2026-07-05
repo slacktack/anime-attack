@@ -1,7 +1,8 @@
 import { beforeEach, expect, test } from "vitest";
+import type { AnimeSummary } from "@/lib/anime/types";
 import { getSpoilerCeiling, setSpoilerCeiling, toggleFavorite, isFavorite, recordProgress, getContinueWatching } from "./store";
 
-const item = { id: 1, title: "Black Clover", cover: "c", banner: null, type: "TV", score: 7.3, year: 2017 };
+const item: AnimeSummary = { id: 1, title: "Black Clover", cover: "c", banner: null, type: "TV", score: 7.3, year: 2017 };
 
 beforeEach(() => localStorage.clear());
 
