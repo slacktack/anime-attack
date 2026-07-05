@@ -14,7 +14,7 @@ export function ThemeSwitcher() {
         <div
           role="menu"
           aria-label="Choose theme"
-          className="nb-card absolute bottom-[calc(100%+0.75rem)] right-0 w-52 bg-ink-800 p-2"
+          className="no-nb nb-card absolute bottom-[calc(100%+0.75rem)] right-0 w-52 bg-ink-800 p-2"
         >
           {themes.map((t) => {
             const active = t.id === theme;
@@ -48,9 +48,14 @@ export function ThemeSwitcher() {
         aria-label="Change theme"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="nb-btn h-12 w-12 rounded-xl p-0"
+        className="no-nb flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 bg-ink-800/90 backdrop-blur-sm transition-transform active:translate-y-0.5"
+        style={{
+          borderColor: "var(--nb-border-color)",
+          boxShadow: "3px 3px 0 0 var(--nb-shadow-color-sm)",
+          color: "var(--foreground)",
+        }}
       >
-        <Palette className="h-5 w-5" />
+        <Palette className="h-5 w-5" aria-hidden="true" />
       </button>
     </div>
   );

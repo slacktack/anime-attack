@@ -112,13 +112,13 @@ export function AnimeDetail({ id }: { id: number }) {
         <EpisodeList malId={extras?.idMal ?? null} aniwatchCategoryId={aniwatchCat?.id} aniwatchCategoryName={aniwatchCat?.name} />
       </section>
 
-      {/* ── Characters Card ── */}
+      {/* ── Characters Row (transparent group — each card carries its own border) ── */}
       {!!chars?.length && (
-        <section className="nb-card-accent bg-ink-800 p-4 sm:p-5" data-card-accent="characters">
+        <section data-card-accent="characters">
           <Carousel title="Characters">
             {chars.map((c) => (
               <Link key={c.id} href={`/character/${c.id}`} className="block min-h-[44px]">
-                <Card3D className="nb-border w-24 shrink-0 overflow-hidden rounded-xl bg-ink-700">
+                <Card3D className="nb-card-accent-sm w-24 shrink-0 overflow-hidden rounded-xl bg-ink-700">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.image ?? ""} alt={c.name} className="aspect-[2/3] w-full object-cover" />
                   <p className="line-clamp-2 p-1 text-[10px] font-semibold">{c.name}</p>
@@ -129,9 +129,9 @@ export function AnimeDetail({ id }: { id: number }) {
         </section>
       )}
 
-      {/* ── Recommendations Card ── */}
+      {/* ── Recommendations Row (transparent group — PosterCard already carries its own border) ── */}
       {!!recs?.length && (
-        <section className="nb-card-accent bg-ink-800 p-4 sm:p-5" data-card-accent="recommend">
+        <section data-card-accent="recommend">
           <Carousel title="You Might Like">
             {recs.map((a) => (
               <PosterCard key={a.id} anime={a} />
