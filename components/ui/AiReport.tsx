@@ -42,7 +42,7 @@ export function AiReport({ text }: { text: string }) {
   const lines = text.split("\n").map(classifyLine);
 
   return (
-    <div className="rounded-2xl bg-black/30 border border-white/10 p-4 font-body">
+    <div className="nb-card bg-ink-800 p-4 font-body" data-card-accent="ai">
       <div className="flex flex-col gap-1.5">
         {lines.map((line, i) => {
           switch (line.kind) {
@@ -52,7 +52,7 @@ export function AiReport({ text }: { text: string }) {
               return (
                 <p
                   key={i}
-                  className="mt-2 font-display text-sm uppercase tracking-wide text-white/50 first:mt-0"
+                  className="nb-heading nb-heading-sm mt-2 text-nb-border-dim first:mt-0"
                 >
                   {line.content}
                 </p>
@@ -65,19 +65,19 @@ export function AiReport({ text }: { text: string }) {
                     color="currentColor"
                     className="mt-0.5 shrink-0 text-accent-purple"
                   />
-                  <span className="leading-relaxed text-white/85">{line.content}</span>
+                  <span className="leading-relaxed font-medium text-white/80">{line.content}</span>
                 </div>
               );
             case "numbered":
               return (
                 <div key={i} className="flex items-start gap-2 pl-1">
                   <span className="shrink-0 font-semibold text-accent-purple">{line.index}.</span>
-                  <span className="leading-relaxed text-white/85">{line.content}</span>
+                  <span className="leading-relaxed font-medium text-white/80">{line.content}</span>
                 </div>
               );
             case "paragraph":
               return (
-                <p key={i} className="leading-relaxed text-white/85">
+                <p key={i} className="leading-relaxed font-medium text-white/80">
                   {line.content}
                 </p>
               );

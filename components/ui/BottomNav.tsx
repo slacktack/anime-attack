@@ -14,14 +14,26 @@ const items: { href: string; label: string; Icon: LucideIcon }[] = [
 export function BottomNav() {
   const path = usePathname();
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-white/5 bg-ink-900/70 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)] pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 inset-x-0 z-50 border-t-2 border-nb-border bg-ink-800 pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-3xl">
-        {items.map((it) => {
+        {items.map((it, i) => {
           const active = it.href === "/" ? path === "/" : path.startsWith(it.href);
+          const isLast = i === items.length - 1;
           return (
-            <Link key={it.href} href={it.href}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 min-h-11 text-[10px] leading-none transition-colors ${active ? "text-accent-purple" : "text-white/50"}`}>
-              <span className={`h-1 w-1 rounded-full transition-colors ${active ? "bg-accent-purple" : "bg-transparent"}`} />
+            <Link
+              key={it.href}
+              href={it.href}
+              className={`
+                flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 min-h-12
+                font-bold text-[10px] uppercase tracking-wider leading-none
+                transition-colors
+                ${!isLast ? "border-r border-nb-border" : ""}
+                ${active
+                  ? "bg-ink-solid nb-shadow-sm border-b-2 border-b-accent-purple text-accent-purple"
+                  : "text-white/60 hover:text-white/80"
+                }
+              `}
+            >
               <it.Icon size={20} color="currentColor" strokeWidth={2} />
               <span className="whitespace-nowrap">{it.label}</span>
             </Link>

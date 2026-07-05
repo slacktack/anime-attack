@@ -13,10 +13,17 @@ import {
 export type ThemeId =
   | "midnight"
   | "neobrutalist"
+  | "neobrutalist-light"
+  | "neon"
+  | "retro"
+  | "obsidian"
   | "sakura"
   | "cyber"
   | "gold"
-  | "mono";
+  | "mono"
+  | "paper"
+  | "mint"
+  | "coral";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -26,11 +33,18 @@ export interface ThemeDefinition {
 
 export const THEMES: ThemeDefinition[] = [
   { id: "midnight", label: "Midnight", primary: "#7C3AED" },
-  { id: "neobrutalist", label: "Neobrutalist", primary: "#8B5CF6" },
+  { id: "neobrutalist", label: "Brutal", primary: "#8B5CF6" },
+  { id: "neobrutalist-light", label: "Brutal Light", primary: "#8B5CF6" },
+  { id: "neon", label: "Neon", primary: "#FF00FF" },
+  { id: "retro", label: "Retro", primary: "#FF6B9D" },
+  { id: "obsidian", label: "Obsidian", primary: "#2DD4BF" },
   { id: "sakura", label: "Sakura", primary: "#F472B6" },
   { id: "cyber", label: "Cyber", primary: "#22D3EE" },
   { id: "gold", label: "Gold", primary: "#F5C518" },
   { id: "mono", label: "Mono", primary: "#E5E5E5" },
+  { id: "paper", label: "Paper", primary: "#7C3AED" },
+  { id: "mint", label: "Mint", primary: "#0D9488" },
+  { id: "coral", label: "Coral", primary: "#E11D48" },
 ];
 
 const STORAGE_KEY = "ac.theme";

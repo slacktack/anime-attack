@@ -12,21 +12,37 @@ export function LibraryView() {
   useEffect(() => { setFavs(getFavorites()); setCw(getContinueWatching()); }, []);
 
   return (
-    <div className="pt-8">
-      <h1 className="mb-6 px-4 text-2xl font-black">Library</h1>
-      <div className="mb-6 grid grid-cols-2 gap-3 px-4">
-        <div className="rounded-2xl bg-ink-800 p-4"><p className="text-2xl font-black text-accent-purple">{favs.length}</p><p className="text-xs text-white/50">Favorites</p></div>
-        <div className="rounded-2xl bg-ink-800 p-4"><p className="text-2xl font-black text-accent-blue">{cw.length}</p><p className="text-xs text-white/50">In progress</p></div>
+    <div>
+      <h1 className="nb-heading nb-heading-xl">Library</h1>
+      <div className="nb-section-header mt-1">Your Collection</div>
+
+      <div className="mt-4 mb-6 grid grid-cols-2 gap-3">
+        <div className="nb-card bg-ink-800 p-4">
+          <p className="nb-heading nb-heading-lg text-accent-purple">{favs.length}</p>
+          <p className="text-xs font-bold text-white/60">Favorites</p>
+        </div>
+        <div className="nb-card bg-ink-800 p-4">
+          <p className="nb-heading nb-heading-lg text-accent-blue">{cw.length}</p>
+          <p className="text-xs font-bold text-white/60">In Progress</p>
+        </div>
       </div>
-      {cw.length > 0 && <Carousel title="Continue Watching">{cw.map((p) => <PosterCard key={p.anime.id} anime={p.anime} />)}</Carousel>}
-      <h2 className="mb-3 mt-4 px-4 text-lg font-bold">Favorites</h2>
-      {favs.length === 0 ? (
-        <p className="flex items-center gap-1 px-4 text-sm text-white/40">
-          No favorites yet — tap <Heart size={14} color="currentColor" fill="currentColor" className="text-accent-crimson" /> on any anime.
-        </p>
-      ) : (
-        <div className="grid grid-cols-3 gap-3 px-4 sm:grid-cols-4 md:grid-cols-6">{favs.map((a) => <PosterCard key={a.id} anime={a} />)}</div>
+
+      {cw.length > 0 && (
+        <div className="nb-card mb-6 bg-ink-800 p-4">
+          <Carousel title="Continue Watching">{cw.map((p) => <PosterCard key={p.anime.id} anime={p.anime} />)}</Carousel>
+        </div>
       )}
+
+      <div className="nb-card bg-ink-800 p-4">
+        <div className="nb-section-header">Favorites</div>
+        {favs.length === 0 ? (
+          <p className="flex items-center gap-1 font-bold text-white/60">
+            No favorites yet — tap <Heart size={14} color="currentColor" fill="currentColor" className="text-accent-crimson" /> on any anime to add it here.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">{favs.map((a) => <PosterCard key={a.id} anime={a} />)}</div>
+        )}
+      </div>
     </div>
   );
 }

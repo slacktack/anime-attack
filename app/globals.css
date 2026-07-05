@@ -1,92 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #f0f0f0;
 
-  /* midnight (default) runtime theme tokens */
-  --ink-900: #080808;
-  --ink-800: #121212;
-  --ink-700: #1c1c1c;
-
-  --accent-purple: #7c3aed;
-  --accent-blue: #3b82f6;
-  --accent-crimson: #dc2626;
-  --accent-gold: #f59e0b;
-}
-
-[data-theme="midnight"] {
-  --ink-900: #080808;
-  --ink-800: #121212;
-  --ink-700: #1c1c1c;
-
-  --accent-purple: #7c3aed;
-  --accent-blue: #3b82f6;
-  --accent-crimson: #dc2626;
-  --accent-gold: #f59e0b;
-}
-
-[data-theme="neobrutalist"] {
+  /* Neobrutalist Ink Scale */
+  --ink-solid: #0a0a0a;
   --ink-900: #0a0a0a;
   --ink-800: #141414;
-  --ink-700: #1e1e1e;
+  --ink-700: #1c1c1c;
 
-  --accent-purple: #8b5cf6;
-  --accent-blue: #2563eb;
+  /* Neobrutalist Border */
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+
+  /* Neobrutalist Shadow */
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+
+  /* Card Accent Colors — one per card type, no rainbow chaos */
+  --nb-accent-ai: #8b5cf6;        /* Purple — AI Panel */
+  --nb-accent-progress: #f97316;  /* Orange — Episodes / Progress */
+  --nb-accent-characters: #eab308;/* Yellow — Characters */
+  --nb-accent-stats: #22c55e;     /* Green — Stats / Ratings */
+  --nb-accent-recommend: #3b82f6; /* Blue — Recommendations */
+  --nb-accent-search: #ec4899;    /* Pink — Search */
+  --nb-accent-library: #06b6d4;   /* Cyan — Library */
+  --nb-accent-quote: #f59e0b;     /* Amber — Quote Widget */
+
+  /* Legacy accent aliases (for theme compatibility) */
+  --accent-purple: var(--nb-accent-ai);
+  --accent-blue: var(--nb-accent-recommend);
   --accent-crimson: #ef4444;
-  --accent-gold: #facc15;
+  --accent-gold: var(--nb-accent-quote);
 }
 
-[data-theme="sakura"] {
-  --ink-900: #120910;
-  --ink-800: #1c0f18;
-  --ink-700: #261421;
-
-  --accent-purple: #f472b6;
-  --accent-blue: #fb7185;
-  --accent-crimson: #e11d48;
-  --accent-gold: #f59e0b;
-}
-
-[data-theme="cyber"] {
-  --ink-900: #05060a;
-  --ink-800: #0b0e16;
-  --ink-700: #131826;
-
-  --accent-purple: #22d3ee;
-  --accent-blue: #3b82f6;
-  --accent-crimson: #e879f9;
-  --accent-gold: #facc15;
-}
-
-[data-theme="gold"] {
-  --ink-900: #0a0a08;
-  --ink-800: #14130e;
-  --ink-700: #1e1b12;
-
-  --accent-purple: #f5c518;
-  --accent-blue: #f59e0b;
-  --accent-crimson: #dc2626;
-  --accent-gold: #60a5fa;
-}
-
-[data-theme="mono"] {
-  --ink-900: #0a0a0a;
-  --ink-800: #151515;
-  --ink-700: #1f1f1f;
-
-  --accent-purple: #e5e5e5;
-  --accent-blue: #a3a3a3;
-  --accent-crimson: #f5f5f5;
-  --accent-gold: #737373;
-}
+/* ── Per-Card Accent Variables ── */
+[data-card-accent="ai"]         { --card-accent: var(--nb-accent-ai); }
+[data-card-accent="progress"]   { --card-accent: var(--nb-accent-progress); }
+[data-card-accent="characters"] { --card-accent: var(--nb-accent-characters); }
+[data-card-accent="stats"]      { --card-accent: var(--nb-accent-stats); }
+[data-card-accent="recommend"]  { --card-accent: var(--nb-accent-recommend); }
+[data-card-accent="search"]     { --card-accent: var(--nb-accent-search); }
+[data-card-accent="library"]    { --card-accent: var(--nb-accent-library); }
+[data-card-accent="quote"]      { --card-accent: var(--nb-accent-quote); }
+[data-card-accent="default"]    { --card-accent: var(--nb-accent-ai); }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-display), ui-sans-serif, system-ui;
   --font-mono: var(--font-geist-mono);
 
+  --color-ink-solid: var(--ink-solid);
   --color-ink-900: var(--ink-900);
   --color-ink-800: var(--ink-800);
   --color-ink-700: var(--ink-700);
@@ -95,15 +62,12 @@
   --color-accent-blue: var(--accent-blue);
   --color-accent-crimson: var(--accent-crimson);
   --color-accent-gold: var(--accent-gold);
+
+  --color-nb-border: var(--nb-border-color);
+  --color-nb-border-dim: var(--nb-border-color-dim);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ── Base ── */
 body {
   background: var(--background);
   color: var(--foreground);
@@ -112,7 +76,7 @@ body {
 
 .font-display {
   font-family: var(--font-display), ui-sans-serif, system-ui;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -121,20 +85,571 @@ body {
 ::-webkit-scrollbar { display: none; }
 body { -webkit-tap-highlight-color: transparent; }
 
+/* ── Typography ── */
+.nb-heading {
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+.nb-heading-sm { font-size: 0.875rem; }
+.nb-heading-md { font-size: 1.125rem; }
+.nb-heading-lg { font-size: 1.5rem; }
+.nb-heading-xl { font-size: 2rem; }
+
+/* ── Borders (the identity) ── */
+.nb-border      { border: 2px solid var(--nb-border-color); }
+.nb-border-thin  { border: 1.5px solid var(--nb-border-color); }
+.nb-border-thick { border: 3px solid var(--nb-border-color); }
+.nb-border-heavy { border: 4px solid var(--nb-border-color); }
+
+/* ── Hard Shadows (no blur, offset only) ── */
+.nb-shadow      { box-shadow: 4px 4px 0 0 var(--nb-shadow-color); }
+.nb-shadow-sm   { box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm); }
+.nb-shadow-lg   { box-shadow: 6px 6px 0 0 var(--nb-shadow-color-lg); }
+.nb-shadow-xl   { box-shadow: 8px 8px 0 0 var(--nb-shadow-color-lg); }
+
+/* Colored accent shadows */
+.nb-shadow-accent { box-shadow: 4px 4px 0 0 var(--card-accent, var(--nb-accent-ai)); }
+
+/* ── Cards (tangible, sticker-like) ── */
+.nb-card {
+  border: 2px solid var(--nb-border-color);
+  box-shadow: 4px 4px 0 0 var(--nb-shadow-color);
+  border-radius: 16px;
+}
+.nb-card-accent {
+  border: 2px solid var(--card-accent, var(--nb-accent-ai));
+  box-shadow: 4px 4px 0 0 var(--card-accent, var(--nb-accent-ai));
+  border-radius: 16px;
+}
+.nb-card-sm {
+  border: 2px solid var(--nb-border-color);
+  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+  border-radius: 12px;
+}
+
+/* ── Buttons (pressable, tactile) ── */
+.nb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+  border: 2px solid var(--nb-border-color);
+  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+  border-radius: 12px;
+  background: var(--ink-800);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.nb-btn:hover   { transform: translateY(-2px); box-shadow: 5px 5px 0 0 var(--nb-shadow-color); }
+.nb-btn:active  { transform: translateY(2px); box-shadow: 1px 1px 0 0 var(--nb-shadow-color-sm); }
+
+.nb-btn-accent {
+  background: var(--card-accent, var(--nb-accent-ai));
+  border-color: var(--card-accent, var(--nb-accent-ai));
+  color: #0a0a0a;
+  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+}
+
+.nb-btn-lg {
+  min-height: 52px;
+  padding: 0.75rem 1.75rem;
+  font-size: 1rem;
+  box-shadow: 4px 4px 0 0 var(--nb-shadow-color);
+}
+
+/* ── Input (manga encyclopedia style) ── */
+.nb-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.625rem 1rem;
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-size: 1rem;
+  font-weight: 500;
+  background: var(--ink-800);
+  color: var(--foreground);
+  border: 3px solid var(--nb-border-color);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+  outline: none;
+  transition: box-shadow 0.1s ease;
+}
+.nb-input:focus {
+  box-shadow: 5px 5px 0 0 var(--card-accent, var(--nb-accent-ai));
+  border-color: var(--card-accent, var(--nb-accent-ai));
+}
+.nb-input::placeholder { color: rgba(240, 240, 240, 0.35); }
+
+/* ── Section Header (magazine style) ── */
+.nb-section-header {
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 3px solid var(--nb-border-color);
+  display: inline-block;
+}
+
+/* ── Badge / Tag ── */
+.nb-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1.5px solid var(--nb-border-color);
+  border-radius: 6px;
+  background: var(--ink-700);
+}
+
+/* ── Scoped utility ── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Text gradient (kept for hero only) ── */
 .text-gradient {
   font-family: var(--font-display), ui-sans-serif, system-ui;
-  letter-spacing: -0.02em;
-  background: linear-gradient(90deg, var(--color-accent-purple), var(--color-accent-blue), var(--color-accent-crimson));
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, var(--nb-accent-ai), var(--nb-accent-recommend), var(--nb-accent-search));
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
 
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+/* ═══════════════════════════════════════════════
+   THEMES — 12 neobrutalist palettes (6 dark + 3 light + 3 hybrid)
+   ═══════════════════════════════════════════════ */
 
-.nb-shadow {
-  box-shadow: 4px 4px 0 0 rgba(255, 255, 255, 0.9);
-  border: 2px solid rgba(255, 255, 255, 0.92);
+/* ── Dark Theme: Midnight (deep purple on black) ── */
+[data-theme="midnight"] {
+  --background: #0a0a0a;
+  --foreground: #f0f0f0;
+  --ink-solid: #0a0a0a;
+  --ink-900: #0a0a0a;
+  --ink-800: #141414;
+  --ink-700: #1c1c1c;
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --accent-purple: #7c3aed;
+  --accent-blue: #3b82f6;
+  --accent-crimson: #ef4444;
+  --accent-gold: #f59e0b;
+  --nb-accent-ai: #8b5cf6;
+  --nb-accent-progress: #f97316;
+  --nb-accent-characters: #eab308;
+  --nb-accent-stats: #22c55e;
+  --nb-accent-recommend: #3b82f6;
+  --nb-accent-search: #ec4899;
+  --nb-accent-library: #06b6d4;
+  --nb-accent-quote: #f59e0b;
+}
+
+/* ── Dark Theme: Neobrutalist (candy accents on near-black + white hard shadows) ── */
+[data-theme="neobrutalist"] {
+  --background: #0c0914;
+  --foreground: #f0edf7;
+  --ink-solid: #0c0914;
+  --ink-900: #0c0914;
+  --ink-800: #14101e;
+  --ink-700: #1b1628;
+  --nb-border-color: #ffffff;
+  --nb-border-color-dim: rgba(255, 255, 255, 0.7);
+  --nb-shadow-color: rgba(255, 255, 255, 0.9);
+  --nb-shadow-color-sm: rgba(255, 255, 255, 0.85);
+  --nb-shadow-color-lg: rgba(255, 255, 255, 0.9);
+  --accent-purple: #8b5cf6;
+  --accent-blue: #8ec5ff;
+  --accent-crimson: #ff6b5e;
+  --accent-gold: #ffd84d;
+  --nb-accent-ai: #8b5cf6;
+  --nb-accent-progress: #ff6b5e;
+  --nb-accent-characters: #ffd84d;
+  --nb-accent-stats: #5eead4;
+  --nb-accent-recommend: #8ec5ff;
+  --nb-accent-search: #ff9dd6;
+  --nb-accent-library: #b8f14a;
+  --nb-accent-quote: #ffd84d;
+}
+
+/* ── Light Theme: Neobrutalist Light (cream bg + black hard shadows) ── */
+[data-theme="neobrutalist-light"] {
+  --background: #f4efe1;
+  --foreground: #141210;
+  --ink-solid: #f4efe1;
+  --ink-900: #f4efe1;
+  --ink-800: #ffffff;
+  --ink-700: #fbf6ea;
+  --nb-border-color: #141210;
+  --nb-border-color-dim: rgba(20, 18, 16, 0.75);
+  --nb-shadow-color: #141210;
+  --nb-shadow-color-sm: #141210;
+  --nb-shadow-color-lg: #141210;
+  --accent-purple: #8b5cf6;
+  --accent-blue: #60a5fa;
+  --accent-crimson: #ff6b5e;
+  --accent-gold: #facc15;
+  --nb-accent-ai: #8b5cf6;
+  --nb-accent-progress: #ff6b5e;
+  --nb-accent-characters: #facc15;
+  --nb-accent-stats: #059669;
+  --nb-accent-recommend: #60a5fa;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #9ee84b;
+  --nb-accent-quote: #facc15;
+}
+
+/* ── Dark Theme: Sakura (cherry blossom pink) ── */
+[data-theme="sakura"] {
+  --background: #0d080c;
+  --foreground: #fce7f3;
+  --ink-solid: #0d080c;
+  --ink-900: #0d080c;
+  --ink-800: #170e14;
+  --ink-700: #1f141c;
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --accent-purple: #c084fc;
+  --accent-blue: #818cf8;
+  --accent-crimson: #fb7185;
+  --accent-gold: #fbbf24;
+  --nb-accent-ai: #f472b6;
+  --nb-accent-progress: #fb7185;
+  --nb-accent-characters: #fbbf24;
+  --nb-accent-stats: #a3e635;
+  --nb-accent-recommend: #c084fc;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #67e8f9;
+  --nb-accent-quote: #fbbf24;
+}
+
+/* ── Dark Theme: Cyber (cyan neon on black) ── */
+[data-theme="cyber"] {
+  --background: #0a0f12;
+  --foreground: #ecfeff;
+  --ink-solid: #0a0f12;
+  --ink-900: #0a0f12;
+  --ink-800: #0f161a;
+  --ink-700: #141c22;
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --accent-purple: #c084fc;
+  --accent-blue: #22d3ee;
+  --accent-crimson: #f87171;
+  --accent-gold: #facc15;
+  --nb-accent-ai: #c084fc;
+  --nb-accent-progress: #22d3ee;
+  --nb-accent-characters: #facc15;
+  --nb-accent-stats: #34d399;
+  --nb-accent-recommend: #38bdf8;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #22d3ee;
+  --nb-accent-quote: #facc15;
+}
+
+/* ── Dark Theme: Gold (warm amber on dark) ── */
+[data-theme="gold"] {
+  --background: #0e0d0a;
+  --foreground: #fefce8;
+  --ink-solid: #0e0d0a;
+  --ink-900: #0e0d0a;
+  --ink-800: #171510;
+  --ink-700: #1f1c14;
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --accent-purple: #c084fc;
+  --accent-blue: #60a5fa;
+  --accent-crimson: #f87171;
+  --accent-gold: #f5c518;
+  --nb-accent-ai: #c084fc;
+  --nb-accent-progress: #f5c518;
+  --nb-accent-characters: #facc15;
+  --nb-accent-stats: #4ade80;
+  --nb-accent-recommend: #60a5fa;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #38bdf8;
+  --nb-accent-quote: #f5c518;
+}
+
+/* ── Dark Theme: Mono (grayscale, stark) ── */
+[data-theme="mono"] {
+  --background: #0a0a0a;
+  --foreground: #e5e5e5;
+  --ink-solid: #0a0a0a;
+  --ink-900: #0a0a0a;
+  --ink-800: #141414;
+  --ink-700: #1c1c1c;
+  --nb-border-color: #f0f0f0;
+  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --nb-shadow-color: rgba(240, 240, 240, 0.85);
+  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
+  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --accent-purple: #a3a3a3;
+  --accent-blue: #a3a3a3;
+  --accent-crimson: #d4d4d4;
+  --accent-gold: #e5e5e5;
+  --nb-accent-ai: #d4d4d4;
+  --nb-accent-progress: #d4d4d4;
+  --nb-accent-characters: #e5e5e5;
+  --nb-accent-stats: #a3a3a3;
+  --nb-accent-recommend: #d4d4d4;
+  --nb-accent-search: #a3a3a3;
+  --nb-accent-library: #d4d4d4;
+  --nb-accent-quote: #e5e5e5;
+}
+
+/* ── Dark Theme: Neon (cyberpunk neons on ultra-black) ── */
+[data-theme="neon"] {
+  --background: #050508;
+  --foreground: #f0f0f0;
+  --ink-solid: #050508;
+  --ink-900: #080810;
+  --ink-800: #0d0d18;
+  --ink-700: #121222;
+  --nb-border-color: #ff00ff;
+  --nb-border-color-dim: rgba(255, 0, 255, 0.7);
+  --nb-shadow-color: rgba(255, 0, 255, 0.85);
+  --nb-shadow-color-sm: rgba(255, 0, 255, 0.7);
+  --nb-shadow-color-lg: rgba(255, 0, 255, 0.75);
+  --accent-purple: #ff00ff;
+  --accent-blue: #00ffff;
+  --accent-crimson: #ff3333;
+  --accent-gold: #ffff00;
+  --nb-accent-ai: #ff00ff;
+  --nb-accent-progress: #00ffff;
+  --nb-accent-characters: #ffff00;
+  --nb-accent-stats: #00ff66;
+  --nb-accent-recommend: #ff6600;
+  --nb-accent-search: #ff00ff;
+  --nb-accent-library: #00ffff;
+  --nb-accent-quote: #ffff00;
+}
+
+/* ── Dark Theme: Retro (synthwave 80s) ── */
+[data-theme="retro"] {
+  --background: #0a0a14;
+  --foreground: #f8e8ff;
+  --ink-solid: #0a0a14;
+  --ink-900: #0f0f1e;
+  --ink-800: #151528;
+  --ink-700: #1a1a32;
+  --nb-border-color: #ff6b9d;
+  --nb-border-color-dim: rgba(255, 107, 157, 0.7);
+  --nb-shadow-color: rgba(255, 107, 157, 0.85);
+  --nb-shadow-color-sm: rgba(255, 107, 157, 0.7);
+  --nb-shadow-color-lg: rgba(255, 107, 157, 0.75);
+  --accent-purple: #c061cb;
+  --accent-blue: #6be4ff;
+  --accent-crimson: #ff6b9d;
+  --accent-gold: #ffd700;
+  --nb-accent-ai: #c061cb;
+  --nb-accent-progress: #ff6b9d;
+  --nb-accent-characters: #ffd700;
+  --nb-accent-stats: #6be4ff;
+  --nb-accent-recommend: #ff6b9d;
+  --nb-accent-search: #c061cb;
+  --nb-accent-library: #6be4ff;
+  --nb-accent-quote: #ffd700;
+}
+
+/* ── Dark Theme: Obsidian (minimal, premium black + emerald) ── */
+[data-theme="obsidian"] {
+  --background: #000000;
+  --foreground: #e0e0e0;
+  --ink-solid: #000000;
+  --ink-900: #050505;
+  --ink-800: #0a0a0a;
+  --ink-700: #111111;
+  --nb-border-color: #2dd4bf;
+  --nb-border-color-dim: rgba(45, 212, 191, 0.7);
+  --nb-shadow-color: rgba(45, 212, 191, 0.85);
+  --nb-shadow-color-sm: rgba(45, 212, 191, 0.65);
+  --nb-shadow-color-lg: rgba(45, 212, 191, 0.75);
+  --accent-purple: #a78bfa;
+  --accent-blue: #2dd4bf;
+  --accent-crimson: #f87171;
+  --accent-gold: #fbbf24;
+  --nb-accent-ai: #a78bfa;
+  --nb-accent-progress: #2dd4bf;
+  --nb-accent-characters: #fbbf24;
+  --nb-accent-stats: #34d399;
+  --nb-accent-recommend: #818cf8;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #22d3ee;
+  --nb-accent-quote: #fbbf24;
+}
+
+/* ── Light Theme: Paper (premium cream + black borders + vibrant accents) ── */
+[data-theme="paper"] {
+  --background: #f8f5f0;
+  --foreground: #0a0a0a;
+  --ink-solid: #f8f5f0;
+  --ink-900: #f8f5f0;
+  --ink-800: #ffffff;
+  --ink-700: #efe9e0;
+  --nb-border-color: #0a0a0a;
+  --nb-border-color-dim: rgba(10, 10, 10, 0.8);
+  --nb-shadow-color: rgba(10, 10, 10, 0.9);
+  --nb-shadow-color-sm: rgba(10, 10, 10, 0.85);
+  --nb-shadow-color-lg: rgba(10, 10, 10, 0.8);
+  --accent-purple: #7c3aed;
+  --accent-blue: #2563eb;
+  --accent-crimson: #dc2626;
+  --accent-gold: #d97706;
+  --nb-accent-ai: #7c3aed;
+  --nb-accent-progress: #ea580c;
+  --nb-accent-characters: #ca8a04;
+  --nb-accent-stats: #059669;
+  --nb-accent-recommend: #2563eb;
+  --nb-accent-search: #db2777;
+  --nb-accent-library: #0891b2;
+  --nb-accent-quote: #d97706;
+}
+
+/* ── Light Theme: Mint (fresh white + teal borders) ── */
+[data-theme="mint"] {
+  --background: #f4faf8;
+  --foreground: #0d1f17;
+  --ink-solid: #f4faf8;
+  --ink-900: #f4faf8;
+  --ink-800: #ffffff;
+  --ink-700: #e8f5ee;
+  --nb-border-color: #0d9488;
+  --nb-border-color-dim: rgba(13, 148, 136, 0.8);
+  --nb-shadow-color: rgba(13, 148, 136, 0.85);
+  --nb-shadow-color-sm: rgba(13, 148, 136, 0.75);
+  --nb-shadow-color-lg: rgba(13, 148, 136, 0.7);
+  --accent-purple: #8b5cf6;
+  --accent-blue: #0d9488;
+  --accent-crimson: #ef4444;
+  --accent-gold: #f59e0b;
+  --nb-accent-ai: #8b5cf6;
+  --nb-accent-progress: #ea580c;
+  --nb-accent-characters: #eab308;
+  --nb-accent-stats: #10b981;
+  --nb-accent-recommend: #0d9488;
+  --nb-accent-search: #ec4899;
+  --nb-accent-library: #06b6d4;
+  --nb-accent-quote: #f59e0b;
+}
+
+/* ── Light Theme: Coral (warm cream + coral/pink) ── */
+[data-theme="coral"] {
+  --background: #fef6f4;
+  --foreground: #1a0d0a;
+  --ink-solid: #fef6f4;
+  --ink-900: #fef6f4;
+  --ink-800: #ffffff;
+  --ink-700: #f8ece8;
+  --nb-border-color: #e11d48;
+  --nb-border-color-dim: rgba(225, 29, 72, 0.8);
+  --nb-shadow-color: rgba(225, 29, 72, 0.85);
+  --nb-shadow-color-sm: rgba(225, 29, 72, 0.75);
+  --nb-shadow-color-lg: rgba(225, 29, 72, 0.7);
+  --accent-purple: #a21caf;
+  --accent-blue: #2563eb;
+  --accent-crimson: #e11d48;
+  --accent-gold: #d97706;
+  --nb-accent-ai: #a21caf;
+  --nb-accent-progress: #e11d48;
+  --nb-accent-characters: #f59e0b;
+  --nb-accent-stats: #059669;
+  --nb-accent-recommend: #2563eb;
+  --nb-accent-search: #db2777;
+  --nb-accent-library: #0891b2;
+  --nb-accent-quote: #d97706;
+}
+
+/* ═══════════════════════════════════════════════
+   NEOBRUTALIST AUTO-APPLY — scoped, low-specificity
+   Brings the nb-* treatment to legacy generic utility
+   classes (bg-ink-*, rounded-full, text-white/*, …)
+   without touching component markup. Uses :where() so
+   any per-element utility class still wins.
+   ═══════════════════════════════════════════════ */
+:where([data-theme="neobrutalist"], [data-theme="neobrutalist-light"]) {
+
+  /* Card-like surfaces */
+  :where(.bg-ink-800, .bg-ink-700, [class*="from-white/"]) {
+    border: 2.5px solid var(--nb-border-color);
+    box-shadow: 4px 4px 0 0 var(--nb-shadow-color);
+    border-radius: 16px;
+    backdrop-filter: none;
+  }
+
+  /* Buttons / pill chips / circular icon buttons */
+  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb) {
+    border: 2.5px solid var(--nb-border-color);
+    box-shadow: 3px 3px 0 0 var(--nb-shadow-color);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb):hover {
+    transform: translateY(-2px);
+    box-shadow: 5px 5px 0 0 var(--nb-shadow-color);
+  }
+  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb):active {
+    transform: translateY(2px);
+    box-shadow: 1px 1px 0 0 var(--nb-shadow-color);
+  }
+
+  /* Inputs */
+  input {
+    border: 2.5px solid var(--nb-border-color);
+    box-shadow: 3px 3px 0 0 var(--nb-shadow-color);
+    border-radius: 12px;
+  }
+
+  /* Headings */
+  :where(h1, h2, .text-gradient) {
+    font-family: var(--font-display), ui-sans-serif, system-ui;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  /* Bottom nav */
+  nav.fixed.bottom-0 {
+    background: var(--ink-900);
+    border-top: 2.5px solid var(--nb-border-color);
+    backdrop-filter: none;
+  }
+  nav.fixed.bottom-0 a[class*="bg-ink-solid"] {
+    background: var(--card-accent, var(--nb-accent-ai));
+    border: 2px solid var(--nb-border-color);
+    color: var(--ink-solid);
+  }
+}
+
+/* ── Light-theme text/surface legibility overrides ── */
+:where([data-theme="neobrutalist-light"]) {
+  .text-white { color: #141210; }
+  [class*="text-white/"] { color: #141210; }
+  [class*="bg-white/"] { background: #fbf6ea; }
+  [class*="border-white/"] { border-color: #141210; }
 }

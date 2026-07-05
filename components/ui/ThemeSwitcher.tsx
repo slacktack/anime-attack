@@ -14,7 +14,7 @@ export function ThemeSwitcher() {
         <div
           role="menu"
           aria-label="Choose theme"
-          className="absolute bottom-[calc(100%+0.75rem)] right-0 w-52 rounded-2xl border border-white/10 bg-ink-800/90 p-2 backdrop-blur-xl shadow-2xl"
+          className="nb-card absolute bottom-[calc(100%+0.75rem)] right-0 w-52 bg-ink-800 p-2"
         >
           {themes.map((t) => {
             const active = t.id === theme;
@@ -28,15 +28,15 @@ export function ThemeSwitcher() {
                   setTheme(t.id);
                   setOpen(false);
                 }}
-                className="flex w-full min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-white/90 transition-colors hover:bg-white/10"
+                className={active ? "nb-btn nb-btn-accent w-full min-h-11 justify-start rounded-xl" : "nb-btn w-full min-h-11 justify-start rounded-xl"}
               >
                 <span
-                  className="h-4 w-4 flex-none rounded-full border border-white/20"
+                  className="h-4 w-4 flex-none rounded-sm border-2 border-nb-border"
                   style={{ backgroundColor: t.primary }}
                   aria-hidden="true"
                 />
                 <span className="flex-1">{t.label}</span>
-                {active ? <Check className="h-4 w-4 flex-none text-white/80" /> : null}
+                {active ? <Check className="h-4 w-4 flex-none" /> : null}
               </button>
             );
           })}
@@ -48,7 +48,7 @@ export function ThemeSwitcher() {
         aria-label="Change theme"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-ink-800/80 text-white backdrop-blur-xl shadow-lg transition-transform active:scale-95"
+        className="nb-btn h-12 w-12 rounded-xl p-0"
       >
         <Palette className="h-5 w-5" />
       </button>

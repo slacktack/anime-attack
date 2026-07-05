@@ -11,11 +11,11 @@ export function ProgressControl({ anime, maxEpisodes }: { anime: AnimeSummary; m
     setEp(clamped); setSpoilerCeiling(anime.id, clamped); recordProgress(anime, clamped);
   }
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-ink-800 px-4 py-3">
-      <span className="text-sm text-white/60">I&apos;m on episode</span>
-      <button onClick={() => update(ep - 1)} className="h-8 w-8 rounded-full bg-white/10">−</button>
+    <div className="nb-card flex items-center gap-3 bg-ink-800 px-4 py-3">
+      <span className="nb-tag">EP</span>
+      <button onClick={() => update(ep - 1)} className="nb-btn nb-btn-accent h-8 min-h-0 w-8 p-0" data-card-accent="progress">−</button>
       <span className="w-8 text-center font-bold">{ep}</span>
-      <button onClick={() => update(ep + 1)} className="h-8 w-8 rounded-full bg-accent-purple">+</button>
+      <button onClick={() => update(ep + 1)} className="nb-btn nb-btn-accent h-8 min-h-0 w-8 p-0" data-card-accent="progress">+</button>
     </div>
   );
 }

@@ -14,39 +14,42 @@ const QUICK_LINKS: { href: string; label: string; Icon: LucideIcon }[] = [
 
 export default function HomePage() {
   return (
-    <main className="pt-0">
+    <main className="flex flex-col gap-8 pt-0">
+      {/* ── Hero: Magazine Cover ── */}
       <ScrollScene heightVh={160} className="relative flex min-h-screen w-full flex-col items-center justify-center px-4 text-center">
         <AuroraBackdrop tint="#7C3AED" />
         <Parallax speed={1.2} className="flex flex-col items-center">
-          <p className="mb-3 flex items-center gap-1.5 text-sm text-white/50">
-            Good Evening <Sparkles size={16} color="currentColor" />
-          </p>
-          <h1 className="text-gradient text-4xl font-black tracking-tight sm:text-6xl">
+          <span className="nb-tag mb-4 text-white">
+            <Sparkles size={14} className="mr-1.5" aria-hidden />
+            Good Evening
+          </span>
+          <h1 className="text-gradient text-5xl font-black tracking-tight sm:text-7xl">
             Anime Companion
           </h1>
-          <p className="mt-4 max-w-xs text-sm text-white/60 sm:max-w-md sm:text-base">
+          <p className="mt-4 max-w-sm font-bold text-base text-white/80 sm:max-w-md sm:text-lg">
             Your cinematic guide to everything anime — track, discover, and dive in.
           </p>
         </Parallax>
       </ScrollScene>
 
-      <nav className="no-scrollbar -mx-4 mb-6 flex gap-3 overflow-x-auto px-4">
+      {/* ── Quick Links: Chunky Neobrutalist Buttons ── */}
+      <nav className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
         {QUICK_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/85 backdrop-blur transition active:scale-95"
+            className="nb-btn shrink-0 active:scale-95"
           >
-            <link.Icon size={18} color="currentColor" aria-hidden />
+            <link.Icon size={18} aria-hidden />
             {link.label}
           </Link>
         ))}
       </nav>
 
-      <div className="mb-6">
-        <QuoteWidget />
-      </div>
+      {/* ── Quote: Bordered Card Block ── */}
+      <QuoteWidget />
 
+      {/* ── Carousels: Independent Blocks ── */}
       <HomeCarousels />
     </main>
   );

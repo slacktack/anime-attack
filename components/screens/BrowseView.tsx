@@ -18,9 +18,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${
-        active ? "bg-accent-purple text-white" : "bg-ink-800 text-white/70 hover:text-white"
-      }`}
+      className={`nb-btn shrink-0 whitespace-nowrap px-4 py-2 text-sm ${active ? "nb-btn-accent" : ""}`}
     >
       {children}
     </button>
@@ -51,8 +49,11 @@ export function BrowseView() {
 
   return (
     <div>
-      <div className="space-y-3">
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <h1 className="nb-heading nb-heading-xl">Browse</h1>
+      <div className="nb-section-header mt-1">Discover Anime</div>
+
+      <div className="nb-card mt-4 space-y-3 bg-ink-800 p-4">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           <Chip active={genre === undefined} onClick={() => setGenre(undefined)}>
             All
           </Chip>
@@ -63,7 +64,7 @@ export function BrowseView() {
           ))}
         </div>
 
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {FORMATS.map((f) => (
             <Chip key={f} active={format === f} onClick={() => setFormat(format === f ? undefined : f)}>
               {f}
@@ -71,7 +72,7 @@ export function BrowseView() {
           ))}
         </div>
 
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {STATUSES.map((s) => (
             <Chip key={s} active={status === s} onClick={() => setStatus(status === s ? undefined : s)}>
               {s.replace(/_/g, " ")}
@@ -83,7 +84,7 @@ export function BrowseView() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="min-h-[44px] flex-1 rounded-xl border border-white/10 bg-ink-800 px-3 text-base text-white outline-none focus:border-accent-purple"
+            className="nb-input min-h-[44px] flex-1"
           >
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -95,7 +96,7 @@ export function BrowseView() {
           <select
             value={year ?? ""}
             onChange={(e) => setYear(e.target.value ? Number(e.target.value) : undefined)}
-            className="min-h-[44px] flex-1 rounded-xl border border-white/10 bg-ink-800 px-3 text-base text-white outline-none focus:border-accent-purple"
+            className="nb-input min-h-[44px] flex-1"
           >
             <option value="">Any Year</option>
             {years.map((y) => (
@@ -108,14 +109,16 @@ export function BrowseView() {
       </div>
 
       <div className="mt-6">
-        {isFetching && <p className="text-sm text-white/40">Loading…</p>}
+        {isFetching && <p className="font-bold text-white/60">Loading…</p>}
         {!isFetching && data?.length === 0 && (
-          <p className="text-sm text-white/40">No anime found for these filters.</p>
+          <p className="font-bold text-white/60">No anime found for these filters.</p>
         )}
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-          {data?.map((a) => (
-            <PosterCard key={a.id} anime={a} />
-          ))}
+        <div className="nb-card bg-ink-800 p-4">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+            {data?.map((a) => (
+              <PosterCard key={a.id} anime={a} />
+            ))}
+          </div>
         </div>
       </div>
     </div>

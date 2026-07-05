@@ -40,81 +40,83 @@ export function CharacterDetail({ id }: { id: number }) {
   }
 
   return (
-    <div className="relative pb-10">
+    <div className="relative flex flex-col gap-4 px-4 pb-10 pt-6 sm:gap-6">
       <HeroBackdrop tint="#7C3AED" />
-      <div className="px-4 pt-6">
+
+      {/* ── Hero Card ── */}
+      <section className="nb-card bg-ink-800 p-4 sm:p-5">
         <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
           {character.image && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={character.image}
               alt={character.name}
-              className="w-40 shrink-0 rounded-2xl object-cover shadow-lg shadow-black/40 sm:w-56"
+              className="nb-border-thick w-40 shrink-0 rounded-xl object-cover sm:w-56"
             />
           )}
           <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{character.name}</h1>
-            {character.native && <p className="mt-1 text-sm text-white/50">{character.native}</p>}
+            <h1 className="nb-heading nb-heading-xl font-black leading-tight">
+              {character.name}
+            </h1>
+            {character.native && (
+              <p className="mt-1 text-sm text-white/50">{character.native}</p>
+            )}
             <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
               {character.gender && (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium">{character.gender}</span>
+                <span className="nb-tag">{character.gender}</span>
               )}
               {character.age && (
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium">Age: {character.age}</span>
+                <span className="nb-tag">Age: {character.age}</span>
               )}
-              <span className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-accent-crimson">
-                <Heart size={14} color="currentColor" fill="currentColor" /> {character.favourites}
+              <span className="nb-tag text-accent-crimson">
+                <Heart size={12} color="currentColor" fill="currentColor" className="mr-1" />
+                {character.favourites}
               </span>
             </div>
-          </div>
-        </div>
 
-        {description && (
-          <div className="mt-6">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">{shownDescription}</p>
-            {isLong && (
-              <button
-                onClick={() => setExpanded((v) => !v)}
-                className="mt-2 min-h-11 text-sm font-semibold text-accent-purple"
-              >
-                {expanded ? "Show less" : "Read more"}
-              </button>
+            {/* ── Bio ── */}
+            {description && (
+              <div className="mt-4">
+                <h2 className="nb-heading nb-heading-sm mb-2">Bio</h2>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/70">
+                  {shownDescription}
+                </p>
+                {isLong && (
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="nb-btn mt-2 text-xs"
+                  >
+                    {expanded ? "Show less" : "Read more"}
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
-
-      {character.media.length > 0 && (
-        <div className="mt-8">
-          <Carousel title="Appears in">
-            {character.media.map((anime) => (
-              <PosterCard key={anime.id} anime={anime} />
-            ))}
-          </Carousel>
         </div>
-      )}
+      </section>
 
-      <section className="mx-4 mt-6 rounded-3xl border border-accent-purple/30 bg-gradient-to-b from-accent-purple/10 to-transparent p-4">
-        <h2 className="mb-3 flex items-center gap-1.5 text-lg font-bold">
+      {/* ── AI Companion Card ── */}
+      <section className="nb-card-accent bg-ink-800 p-4 sm:p-5" data-card-accent="ai">
+        <h2 className="nb-heading nb-heading-md mb-3 flex items-center gap-1.5">
           <Sparkles size={18} color="currentColor" /> AI Companion{" "}
           <span className="text-xs font-normal text-white/40">(spoiler-safe)</span>
         </h2>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => askFresh({ task: "character" })}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="nb-btn"
           >
             <Sparkles size={16} color="currentColor" /> Summary
           </button>
           <button
             onClick={() => askFresh({ task: "charfacts" })}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="nb-btn"
           >
             <Lightbulb size={16} color="currentColor" /> Fun facts
           </button>
           <button
             onClick={() => askFresh({ task: "charquiz" })}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 py-2.5 text-sm"
+            className="nb-btn"
           >
             <HelpCircle size={16} color="currentColor" /> Quiz
           </button>
@@ -130,9 +132,9 @@ export function CharacterDetail({ id }: { id: number }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Ask anything about this character…"
-            className="min-h-11 flex-1 rounded-full border border-white/10 bg-ink-800 px-4 py-2.5 text-base outline-none focus:border-accent-purple"
+            className="nb-input flex-1"
           />
-          <button className="min-h-11 rounded-full bg-accent-purple px-4 py-2.5 text-sm font-semibold">Ask</button>
+          <button className="nb-btn nb-btn-accent">Ask</button>
         </form>
         {loading && <p className="mt-3 animate-pulse text-sm text-white/40">Thinking…</p>}
         {error && <p className="mt-3 text-sm text-accent-crimson">AI is temporarily unavailable. Please try again.</p>}
@@ -142,6 +144,17 @@ export function CharacterDetail({ id }: { id: number }) {
           </div>
         )}
       </section>
+
+      {/* ── Appears In Card ── */}
+      {character.media.length > 0 && (
+        <section className="nb-card-accent bg-ink-800 p-4 sm:p-5" data-card-accent="recommend">
+          <Carousel title="Appears in">
+            {character.media.map((anime) => (
+              <PosterCard key={anime.id} anime={anime} />
+            ))}
+          </Carousel>
+        </section>
+      )}
     </div>
   );
 }

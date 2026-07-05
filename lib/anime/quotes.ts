@@ -6,21 +6,17 @@ export interface AnimeQuote {
   quote: string;
 }
 
+const QUOTE_API = "/api/proxy/quotes";
+
 export async function getRandomQuote(): Promise<AnimeQuote | null> {
   try {
-    const res = await fetch("https://animechan.io/api/v1/random", {
-      headers: { Accept: "application/json" },
-      next: { revalidate: 0 },
-    } as RequestInit);
+    const res = await fetch(QUOTE_API);
     if (!res.ok) return null;
-    const json = (await res.json()) as { data?: Rec };
-    const data = json.data;
-    if (!data) return null;
-    return {
-      anime: data.anime?.name,
-      character: data.character?.name,
-      quote: data.content,
-    };
+    const json = (await res.json()) as Rec;
+    const anime = json.anime ?? json.data?.anime?.name ?? "Unknown";
+    const character = json.character ?? json.data?.character?.name ?? "Unknown";
+    const quote = json.quote ?? json.data?.content ?? "...";
+    return { anime, character, quote };
   } catch {
     return null;
   }
