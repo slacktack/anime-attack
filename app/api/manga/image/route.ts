@@ -4,7 +4,16 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const UA = "AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)";
-const ALLOWED_HOSTS = ["uploads.mangadex.org", "mangadex.org", "mangadex.network"];
+const ALLOWED_HOSTS = ["uploads.mangadex.org", "mangadex.org", "mangadex.network", "planeptune.us", "compsci88.com"];
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+
+function headersFor(host: string): Record<string, string> {
+  if (host.endsWith("planeptune.us") || host.endsWith("compsci88.com")) {
+    return { "User-Agent": BROWSER_UA, Referer: "https://weebcentral.com/" };
+  }
+  return { "User-Agent": UA, Referer: "https://mangadex.org/" };
+}
 
 function allowed(hostname: string): boolean {
   return ALLOWED_HOSTS.some(
@@ -22,9 +31,8 @@ async function grab(target: string): Promise<Response | null> {
   try {
     const res = await fetch(target, {
       headers: {
-        "User-Agent": UA,
+        ...headersFor(new URL(target).hostname),
         Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        Referer: "https://mangadex.org/",
       },
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
@@ -32,8 +40,7 @@ async function grab(target: string): Promise<Response | null> {
     if (!res.ok) return null;
     const type = res.headers.get("content-type") ?? "";
     if (!type.startsWith("image/")) return null;
-    const length = Number(res.headers.get("content-length") ?? "0");
-    if (length === 0) return null;
+    if (res.headers.get("content-length") === "0") return null;
     return res;
   } catch {
     return null;

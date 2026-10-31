@@ -1,78 +1,74 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  ArrowUpDown,
-  BookOpen,
-  ChevronRight,
-  ExternalLink,
-  Loader2,
-  Play,
-  Search,
-} from "lucide-react";
+import { ArrowUpDown, BookOpen, Lock, Play, Search } from "lucide-react";
 import type { MangaChapter, MangaDetail } from "@/lib/manga/types";
 
-const rowClass =
-  "glass flex min-h-[62px] items-center justify-between gap-3 rounded-2xl p-3 transition-colors hover:bg-white/[0.07]";
+const isReadable = (c: MangaChapter) => (c.pages > 0 || c.source === "weebcentral") && !c.externalUrl;
 
-function ChapterRow({ chapter }: { chapter: MangaChapter }) {
-  const badge = chapter.chapter
-    ? `CH ${chapter.chapter}`
-    : chapter.volume
-      ? `VOL ${chapter.volume}`
-      : "READ";
+export function lastReadKey(mangaId: string) {
+  return `ac:manga-last:${mangaId}`;
+}
 
-  const inner = (
+function relDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function ChapterRow({ chapter, current }: { chapter: MangaChapter; current: boolean }) {
+  const readable = isReadable(chapter);
+  const label = chapter.chapter ? `Chapter ${chapter.chapter}` : chapter.volume ? `Volume ${chapter.volume}` : "One-shot";
+  const body = (
     <>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="flex h-9 min-w-14 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] px-2 text-[11px] font-bold text-white/80">
-          {badge}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14.5px] font-semibold">{label}</span>
+        <span className={`line-clamp-1 block text-[12.5px] ${current ? "text-black/60" : "text-muted"}`}>
+          {readable ? chapter.title || relDate(chapter.publishAt) || "Read now" : "Not available yet"}
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-1 text-sm font-semibold text-white/90">
-            {chapter.title || `Chapter ${chapter.chapter ?? "—"}`}
-          </p>
-          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/35">
-            {chapter.pages > 0 ? `${chapter.pages} pages` : "Official release"}
-            {chapter.group ? ` · ${chapter.group}` : ""}
-          </p>
-        </div>
-      </div>
-      {chapter.externalUrl ? (
-        <ExternalLink size={16} className="shrink-0 text-sky-300/70" />
+      </span>
+      {readable ? (
+        <BookOpen size={16} className="shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
       ) : (
-        <ChevronRight size={18} className="shrink-0 text-white/35" />
+        <Lock size={14} className="shrink-0 opacity-60" />
       )}
     </>
   );
-
-  if (chapter.externalUrl) {
+  const cls = `group flex min-h-[60px] items-center gap-3 rounded-lg px-4 py-2.5 transition-colors ${
+    current ? "bg-white text-black" : "bg-ink-800 hover:bg-ink-700"
+  }`;
+  if (readable) {
     return (
-      <a
-        href={chapter.externalUrl}
-        target="_blank"
-        rel="noreferrer noopener"
-        className={rowClass}
-      >
-        {inner}
-      </a>
+      <Link href={`/read/${chapter.id}`} className={cls}>
+        {body}
+      </Link>
     );
   }
-
   return (
-    <Link href={`/read/${chapter.id}`} className={rowClass} prefetch={false}>
-      {inner}
-    </Link>
+    <span title="No source has this chapter yet" className={`${cls} cursor-default opacity-45`}>
+      {body}
+    </span>
   );
 }
 
 export function MangaDetailView({ id }: { id: string }) {
   const [term, setTerm] = useState("");
   const [ascending, setAscending] = useState(false);
-  const [visible, setVisible] = useState(60);
+  const [visible, setVisible] = useState(90);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [last, setLast] = useState<{ id: string; chapter: string | null } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(lastReadKey(id));
+      setLast(raw ? JSON.parse(raw) : null);
+    } catch {
+      setLast(null);
+    }
+  }, [id]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["manga-detail", id],
@@ -85,202 +81,147 @@ export function MangaDetailView({ id }: { id: string }) {
     staleTime: 300_000,
   });
 
+  useEffect(() => {
+    if (data?.title) document.title = `${data.title} · Anime Attack`;
+  }, [data?.title]);
+
+  const readable = useMemo(() => (data?.chapters ?? []).filter(isReadable), [data]);
   const chapters = useMemo(() => {
     if (!data) return [];
-    const search = term.trim().toLowerCase();
-    const list = search
-      ? data.chapters.filter((chapter) => {
-          if ((chapter.chapter ?? "").includes(search)) return true;
-          return (chapter.title ?? "").toLowerCase().includes(search);
-        })
-      : data.chapters;
+    const q = term.trim().toLowerCase();
+    // hide outbound-only chapters when the same run is readable here
+    const base = readable.length ? data.chapters.filter(isReadable) : data.chapters;
+    const list = q
+      ? base.filter((c) => (c.chapter ?? "").includes(q) || (c.title ?? "").toLowerCase().includes(q))
+      : base;
     return ascending ? [...list].reverse() : list;
-  }, [data, term, ascending]);
-
-  const hosted = useMemo(
-    () => (data?.chapters ?? []).filter((chapter) => chapter.pages > 0 && !chapter.externalUrl),
-    [data],
-  );
-  const official = useMemo(
-    () => (data?.chapters ?? []).filter((chapter) => !!chapter.externalUrl),
-    [data],
-  );
-  const firstReadable = hosted[hosted.length - 1] ?? null;
-  const firstOfficial = official[official.length - 1] ?? null;
+  }, [data, term, ascending, readable.length]);
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4 px-4 py-6">
-        <div className="h-10 w-24 animate-pulse rounded-xl bg-ink-800" />
-        <div className="h-64 animate-pulse rounded-2xl bg-ink-800" />
-        <div className="h-11 animate-pulse rounded-xl bg-ink-800" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-14 animate-pulse rounded-xl bg-ink-800" />
-        ))}
+      <div className="pb-12">
+        <div className="skeleton h-[52svh] min-h-[420px] w-full rounded-none" />
+        <div className="aa-gutter mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} className="skeleton h-[60px]" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <div className="px-4 py-8">
-        <Link href="/manga" className="nb-btn mb-5">
-          <ArrowLeft size={16} /> Manga
+      <div className="aa-gutter py-20 text-center">
+        <p className="font-display text-[20px] font-bold">This manga didn&apos;t load</p>
+        <p className="mt-1 text-[14px] text-muted">{error instanceof Error ? error.message : "Try again in a moment."}</p>
+        <Link href="/manga" className="aa-cta mt-5">
+          Back to manga
         </Link>
-        <div className="nb-card p-5">
-          <p className="text-sm font-bold">Couldn&apos;t open this manga</p>
-          <p className="mt-1 text-xs text-white/50">
-            {error instanceof Error ? error.message : "Try again in a moment."}
-          </p>
-        </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-5 px-4 pb-8 pt-4">
-      <div className="flex items-center justify-between gap-3">
-        <Link href="/manga" className="nb-btn">
-          <ArrowLeft size={16} /> Manga
-        </Link>
-        <span className="nb-tag">{data.status ?? "manga"}</span>
-      </div>
+  const first = readable[readable.length - 1] ?? null;
+  const resume = last && readable.find((c) => c.id === last.id) ? last : null;
+  const latest = readable[0] ?? null;
+  const people = [...data.authors, ...data.artists].filter((v, i, arr) => arr.indexOf(v) === i);
 
-      <section className="nb-card p-4">
-        <div className="flex gap-4">
-          {data.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={data.cover}
-              alt={data.title}
-              className="h-48 w-32 shrink-0 rounded-2xl object-cover shadow-2xl shadow-black/50 sm:h-60 sm:w-40"
-            />
-          ) : (
-            <div className="flex h-48 w-32 shrink-0 items-center justify-center rounded-2xl bg-ink-700 sm:h-60 sm:w-40">
-              <BookOpen size={30} className="text-white/30" />
+  return (
+    <div className="pb-16">
+      <section className="on-media relative overflow-hidden bg-black">
+        {data.cover && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={data.cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl saturate-150" />
+        )}
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--ink-solid)_0%,color-mix(in_oklab,var(--ink-solid)_60%,transparent)_45%,rgba(0,0,0,0.35)_100%)]" />
+        <div className="aa-gutter relative flex flex-col gap-6 pb-8 pt-[calc(var(--header-h)+env(safe-area-inset-top)+12px)] sm:flex-row sm:items-end lg:gap-10 lg:pb-12 lg:pt-[calc(var(--header-h)+40px)]">
+          <div className="poster-frame aspect-[2/3] w-[150px] shrink-0 rounded-lg shadow-[0_30px_60px_-20px_rgba(0,0,0,0.9)] ring-1 ring-white/10 sm:w-[190px] lg:w-[240px]">
+            {data.cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.cover} alt={data.title} className="h-full w-full object-cover" />
+            ) : (
+              <BookOpen size={30} className="m-auto mt-[60%] text-white/30" />
+            )}
+          </div>
+          <div className="min-w-0 max-w-3xl">
+            <h1 className="aa-billboard-title text-[38px] text-white sm:text-[52px] lg:text-[clamp(52px,5vw,84px)]">{data.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-medium text-white/80">
+              {data.status && <span className="font-semibold capitalize text-emerald-400">{data.status}</span>}
+              {data.year && <span>{data.year}</span>}
+              {readable.length > 0 && <span>{readable.length} chapters</span>}
+              {people[0] && <span className="text-white/60">{people.slice(0, 2).join(", ")}</span>}
             </div>
-          )}
-          <div className="flex min-w-0 flex-col justify-end gap-2">
-            <h1 className="nb-heading text-2xl leading-[1.05] sm:text-4xl">{data.title}</h1>
-            <p className="line-clamp-2 text-xs font-medium text-white/50">
-              {[...data.authors, ...data.artists].filter((v, i, arr) => arr.indexOf(v) === i).join(" · ") ||
-                "Unknown author"}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {data.year && <span className="nb-tag">{data.year}</span>}
-              {data.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="nb-tag">
-                  {tag}
+            {data.tags.length > 0 && <p className="mt-2 text-[13.5px] text-white/65">{data.tags.slice(0, 5).join("  •  ")}</p>}
+            {data.description && (
+              <button type="button" onClick={() => setStoryOpen((v) => !v)} className="mt-4 block text-left">
+                <span className={`block max-w-[68ch] text-[15px] leading-relaxed text-white/80 ${storyOpen ? "" : "line-clamp-3"}`}>
+                  {data.description}
                 </span>
-              ))}
+              </button>
+            )}
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
+              {resume ? (
+                <Link href={`/read/${resume.id}`} className="aa-cta lg:min-h-[52px] lg:px-8 lg:text-[17px]">
+                  <Play size={19} fill="currentColor" /> Continue chapter {resume.chapter ?? ""}
+                </Link>
+              ) : first ? (
+                <Link href={`/read/${first.id}`} className="aa-cta lg:min-h-[52px] lg:px-8 lg:text-[17px]">
+                  <Play size={19} fill="currentColor" /> Read chapter {first.chapter ?? "1"}
+                </Link>
+              ) : null}
+              {latest && latest.id !== first?.id && latest.id !== resume?.id && (
+                <Link href={`/read/${latest.id}`} className="aa-cta-ghost lg:min-h-[52px] lg:px-7 lg:text-[17px]">
+                  Latest: ch. {latest.chapter}
+                </Link>
+              )}
             </div>
-            {firstReadable ? (
-              <Link
-                href={`/read/${firstReadable.id}`}
-                className="nb-btn nb-btn-accent mt-1 w-fit"
-                prefetch={false}
-              >
-                <Play size={14} fill="currentColor" /> Start reading
-              </Link>
-            ) : firstOfficial?.externalUrl ? (
-              <a
-                href={firstOfficial.externalUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="nb-btn nb-btn-accent mt-1 w-fit"
-              >
-                <ExternalLink size={14} /> Read officially
-              </a>
-            ) : null}
           </div>
         </div>
-
-        {data.description && (
-          <details className="mt-4">
-            <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-white/45">
-              Synopsis
-            </summary>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/65">
-              {data.description}
-            </p>
-          </details>
-        )}
-
-        <a
-          href={`https://mangadex.org/title/${data.id}`}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/30 hover:text-white/60"
-        >
-          <ExternalLink size={11} /> View on MangaDex
-        </a>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="nb-section-header mb-0">
+      <section className="aa-gutter mt-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <h2 className="aa-section-title mr-auto">
             Chapters
-            <span className="text-xs font-semibold tracking-normal text-white/35">
-              {data.chapters.length > 0 ? `${data.chapters.length} total` : ""}
-            </span>
+            {chapters.length > 0 && <span className="text-[13px] font-medium tracking-normal text-muted">{chapters.length}</span>}
           </h2>
-          <button
-            type="button"
-            onClick={() => setAscending((value) => !value)}
-            className="nb-btn min-h-10 px-3 text-xs"
-          >
-            <ArrowUpDown size={13} /> {ascending ? "Oldest" : "Newest"}
+          <label className="relative block w-full sm:w-64">
+            <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+            <input
+              value={term}
+              onChange={(e) => {
+                setTerm(e.target.value);
+                setVisible(90);
+              }}
+              placeholder="Find a chapter"
+              inputMode="search"
+              className="nb-input pl-10"
+              style={{ minHeight: 44 }}
+            />
+          </label>
+          <button type="button" onClick={() => setAscending((v) => !v)} className="nb-btn">
+            <ArrowUpDown size={15} /> {ascending ? "Oldest first" : "Newest first"}
           </button>
         </div>
 
-        {hosted.length === 0 && official.length > 0 && (
-          <div className="nb-card p-4">
-            <p className="text-sm font-semibold">English pages live on the official site</p>
-            <p className="mt-1 text-xs leading-relaxed text-white/50">
-              MangaDex only indexes external links for this title. Tap any chapter below to continue
-              on the publisher — free on Webnovel / Tappytoon.
-            </p>
-          </div>
-        )}
-
-        <div className="relative">
-          <Search
-            size={15}
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40"
-          />
-          <input
-            value={term}
-            onChange={(event) => {
-              setTerm(event.target.value);
-              setVisible(60);
-            }}
-            placeholder="Jump to chapter…"
-            inputMode="search"
-            className="nb-input pl-11"
-          />
-        </div>
-
-        {!data.chapters.length ? (
-          <div className="nb-card p-5 text-center">
-            <p className="text-sm font-bold">No readable chapters here</p>
-            <p className="mt-1 text-xs text-white/50">
-              This title may be licensed. Try another edition or read it on MangaDex.
+        {chapters.length === 0 ? (
+          <div className="py-14 text-center">
+            <p className="font-display text-[20px] font-bold">{term ? "No chapter matches that" : "No English chapters yet"}</p>
+            <p className="mt-1 text-[14px] text-muted">
+              {term ? "Try a chapter number." : "This series hasn't been translated in any source we read from."}
             </p>
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-2">
-              {chapters.slice(0, visible).map((chapter) => (
-                <ChapterRow key={chapter.id} chapter={chapter} />
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {chapters.slice(0, visible).map((c) => (
+                <ChapterRow key={c.id} chapter={c} current={c.id === resume?.id} />
               ))}
             </div>
             {chapters.length > visible && (
-              <button
-                type="button"
-                onClick={() => setVisible((value) => value + 100)}
-                className="nb-btn w-full"
-              >
-                <Loader2 size={14} /> Load {Math.min(100, chapters.length - visible)} more
+              <button type="button" onClick={() => setVisible((v) => v + 150)} className="nb-btn mt-4 w-full">
+                Show {Math.min(150, chapters.length - visible)} more
               </button>
             )}
           </>

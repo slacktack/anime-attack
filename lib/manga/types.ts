@@ -19,12 +19,14 @@ export type MangaChapter = {
   group: string | null;
   publishAt: string | null;
   externalUrl: string | null;
+  source?: "mangadex" | "weebcentral";
 };
 
 export type MangaDetail = MangaCard & {
   authors: string[];
   artists: string[];
   altTitles: string[];
+  anilistId?: number | null;
   chapters: MangaChapter[];
 };
 

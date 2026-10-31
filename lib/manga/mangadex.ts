@@ -23,9 +23,15 @@ async function api<T>(path: string, revalidate = 300): Promise<T> {
   return (await res.json()) as T;
 }
 
+// MangaDex often stores the romanized name as "en"; an English alt title reads better.
 function titleOf(attrs: Rec): string {
   const titles = attrs?.title ?? {};
-  return titles.en || titles["ja-ro"] || Object.values(titles)[0] || "Untitled";
+  const main: string = titles.en || titles["ja-ro"] || titles["ko-ro"] || Object.values(titles)[0] || "Untitled";
+  const originalLang: string = attrs?.originalLanguage ?? "";
+  if (originalLang === "en") return main;
+  const altEn = (attrs?.altTitles ?? []).map((a: Rec) => a?.en).filter(Boolean) as string[];
+  const romanized = !titles.en || titles["ja-ro"] || titles["ko-ro"] || /\b(no|wa|ga|wo|na|ni|de|to)\b/i.test(main);
+  return romanized && altEn.length ? altEn[0] : main;
 }
 
 function descriptionOf(attrs: Rec): string {
@@ -173,6 +179,7 @@ export async function getMangaDetail(id: string): Promise<MangaDetail> {
       .map((alt: Rec) => alt?.en)
       .filter((alt: unknown): alt is string => typeof alt === "string")
       .slice(0, 6),
+    anilistId: Number(manga.attributes?.links?.al) || null,
     chapters,
   };
 }

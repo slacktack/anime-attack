@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMangaDetail } from "@/lib/manga/mangadex";
+import { getMangaFull } from "@/lib/manga/source";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -13,7 +13,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid manga id" }, { status: 400 });
   }
   try {
-    const data = await getMangaDetail(id);
+    const data = await getMangaFull(id);
     return NextResponse.json(data, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",

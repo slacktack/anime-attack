@@ -71,7 +71,7 @@ function PageImage({
             else setAttempt((n) => n + 1);
           }}
           className={`block w-full select-none transition-opacity duration-300 ${
-            loaded ? "opacity-100" : "opacity-0"
+            loaded ? "opacity-100" : "min-h-[70vh] opacity-0"
           }`}
         />
       )}
@@ -114,6 +114,19 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
     staleTime: 300_000,
     gcTime: 900_000,
   });
+
+  // remember the last chapter for "Continue reading"
+  useEffect(() => {
+    if (!data?.mangaId) return;
+    try {
+      window.localStorage.setItem(
+        `ac:manga-last:${data.mangaId}`,
+        JSON.stringify({ id: data.chapterId, chapter: data.chapter }),
+      );
+    } catch {
+      /* storage unavailable */
+    }
+  }, [data?.mangaId, data?.chapterId, data?.chapter]);
 
   const pages = useMemo(() => {
     if (!data) return [];
@@ -200,6 +213,7 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
               {data.title ? ` · ${data.title}` : ""}
             </p>
           </div>
+          {data.saverPages?.[0] !== data.pages?.[0] && (
           <button
             type="button"
             onClick={() => changeQuality(quality === "high" ? "low" : "high")}
@@ -209,6 +223,7 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
             {quality === "high" ? <Sparkles size={13} /> : <Gauge size={13} />}
             {quality === "high" ? "HD" : "Lite"}
           </button>
+          )}
         </div>
         <div className="mx-2.5 mb-2 h-1 overflow-hidden rounded-full bg-white/10">
           <div
@@ -222,9 +237,14 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
       </div>
 
       {pages.length === 0 ? (
-        <div className="px-4 py-10 text-center">
-          <p className="font-display text-[14px] font-bold">No pages available</p>
-          <p className="mt-1 text-[12px] text-white/50">Try a different chapter or quality.</p>
+        <div className="px-4 py-16 text-center">
+          <p className="font-display text-[20px] font-bold">This chapter isn&apos;t readable here</p>
+          <p className="mx-auto mt-1 max-w-sm text-[14px] text-muted">
+            It&apos;s published on the official site. Open the series to find the official link.
+          </p>
+          <Link href={`/manga/${data.mangaId}`} className="aa-cta mt-5">
+            Back to the series
+          </Link>
         </div>
       ) : (
         <div className="mt-2 flex flex-col items-center gap-0.5 bg-black">

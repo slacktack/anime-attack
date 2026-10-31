@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -10,48 +11,32 @@ import { useDebounce } from "@/lib/ui/useDebounce";
 
 function MangaCardView({ manga }: { manga: MangaCard }) {
   return (
-    <Link
-      href={`/manga/${manga.id}`}
-      className="group flex min-w-0 flex-col gap-2"
-      prefetch={false}
-    >
-      <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-ink-800 shadow-[0_16px_34px_-26px_rgba(0,0,0,0.95)]">
+    <Link href={`/manga/${manga.id}`} className="group block min-w-0">
+      <div className="poster-frame aspect-[2/3] ring-1 ring-inset ring-white/[0.06]">
         {manga.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={manga.cover}
-            alt={manga.title}
-            loading="lazy"
-            decoding="async"
-            className="aspect-[2/3] w-full object-cover transition-transform duration-300 group-active:scale-[0.98]"
-          />
+          <img src={manga.cover} alt={manga.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex aspect-[2/3] w-full items-center justify-center bg-ink-700">
-            <BookOpen size={28} className="text-white/30" />
-          </div>
-        )}
-        {manga.latestChapter && (
-          <span className="absolute bottom-1.5 left-1.5 rounded-md border border-nb-border/60 bg-ink-solid/85 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide backdrop-blur-sm">
-            Ch. {manga.latestChapter}
+          <span className="grid h-full w-full place-items-center p-3 text-center font-display text-[15px] font-bold text-white/40">
+            {manga.title}
           </span>
         )}
-        <span className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white/85 backdrop-blur">
-          {manga.status ?? "manga"}
-        </span>
-        <div className="aa-scrim-soft pointer-events-none absolute inset-0" />
       </div>
-      <p className="line-clamp-2 font-display text-[12px] font-bold leading-snug text-white/90">{manga.title}</p>
+      <p className="mt-2 line-clamp-2 text-[13px] font-semibold leading-snug text-white/90 group-hover:text-white">{manga.title}</p>
+      <p className="mt-0.5 text-[12px] capitalize text-muted">
+        {[manga.latestChapter ? `Ch. ${manga.latestChapter}` : null, manga.status].filter(Boolean).join("  /  ")}
+      </p>
     </Link>
   );
 }
 
 function GridSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+    <div className="aa-grid">
       {Array.from({ length: 10 }).map((_, i) => (
         <div key={i} className="flex flex-col gap-2">
-          <div className="aspect-[2/3] w-full animate-pulse rounded-xl border-2 border-nb-border/20 bg-ink-800" />
-          <div className="h-3 w-4/5 animate-pulse rounded bg-ink-700" />
+          <div className="skeleton aspect-[2/3] w-full" />
+          <div className="skeleton h-3 w-4/5 rounded" />
         </div>
       ))}
     </div>
@@ -61,7 +46,7 @@ function GridSkeleton() {
 export function MangaBrowser() {
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(0);
-  const [order, setOrder] = useState<"readable" | "popular" | "latest">("readable");
+  const [order, setOrder] = useState<"popular" | "latest">("popular");
   const query = useDebounce(term, 350);
 
   useEffect(() => {
@@ -72,7 +57,6 @@ export function MangaBrowser() {
     queryKey: ["manga-list", query, page, order],
     queryFn: async (): Promise<MangaList> => {
       const params = new URLSearchParams({ page: String(page), order });
-      if (order === "readable") params.set("readable", "1");
       if (query.trim()) params.set("q", query.trim());
       const res = await fetch(`/api/manga/search?${params.toString()}`);
       const json = await res.json();
@@ -87,17 +71,9 @@ export function MangaBrowser() {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex flex-col gap-2">
-        <span className="nb-tag w-fit text-accent-purple">
-          <BookOpen size={12} className="mr-1.5" /> Manga
-        </span>
-        <h1 className="nb-heading nb-heading-xl font-black leading-none">Read the source.</h1>
-        <p className="text-sm text-white/55">
-          Thousands of titles, chapter by chapter. No ads, no redirects, just pages.
-        </p>
-      </header>
+      <PageHeader title="Manga" subtitle="Read the source material, chapter by chapter." />
 
-      <div className="relative">
+      <div className="relative max-w-2xl">
         <Search
           size={16}
           className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/40"
@@ -105,22 +81,13 @@ export function MangaBrowser() {
         <input
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          placeholder="Search any manga…"
+          placeholder="Search any manga, manhwa or manhua"
           inputMode="search"
           className="nb-input pl-11"
         />
       </div>
 
       <div className="flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => setOrder("readable")}
-          aria-pressed={order === "readable"}
-          className="aa-pill"
-          data-active={order === "readable"}
-        >
-          <BookOpen size={13} /> Readable here
-        </button>
         <button
           type="button"
           onClick={() => setOrder("popular")}
@@ -157,7 +124,7 @@ export function MangaBrowser() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="aa-grid">
             {data.items.map((manga) => (
               <MangaCardView key={manga.id} manga={manga} />
             ))}
