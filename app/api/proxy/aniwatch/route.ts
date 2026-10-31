@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const cacheHeaders = {
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=900",
     };
 
     // Return JSON or text depending on response

@@ -6,6 +6,7 @@ import {
   getRelations,
 } from "@/lib/anime/anilist";
 import { getAnimeExtras } from "@/lib/anime/anilist-extra";
+import { getKitsuBackdrop } from "@/lib/anime/kitsu";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -34,9 +35,12 @@ export async function GET(
   };
 
   try {
-    const [anime, extras, relations, characters, recommendations] = await Promise.all([
+    const extrasP = settle(() => getAnimeExtras(id), { idMal: null as number | null, color: null as string | null });
+    const backdropP = extrasP.then((e) => (e.idMal ? getKitsuBackdrop(e.idMal) : null));
+    const [anime, extras, backdrop, relations, characters, recommendations] = await Promise.all([
       getAnimeDetails(id),
-      settle(() => getAnimeExtras(id), { idMal: null, color: null }),
+      extrasP,
+      backdropP,
       settle(() => getRelations(id), []),
       settle(() => getCharacters(id), []),
       settle(() => getRecommendations(id), []),
@@ -47,6 +51,7 @@ export async function GET(
         anime,
         malId: extras.idMal,
         accentColor: extras.color,
+        backdrop,
         relations,
         characters,
         recommendations,

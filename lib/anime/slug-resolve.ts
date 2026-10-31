@@ -129,6 +129,6 @@ export async function resolveSlugToMal(slug: string): Promise<SlugTarget | null>
     if (value) break;
   }
 
-  cache.set(key, { expires: Date.now() + TTL, value });
+  cache.set(key, { expires: Date.now() + (value ? TTL : 15_000), value });
   return value;
 }

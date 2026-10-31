@@ -146,7 +146,10 @@ export async function GET(request: NextRequest) {
     source,
   };
 
+  // AniList miss or rate-limit: don't pin an empty shell in the CDN for 15 minutes
   return NextResponse.json(payload, {
-    headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600" },
+    headers: {
+      "Cache-Control": media ? "public, s-maxage=900, stale-while-revalidate=3600" : "no-store",
+    },
   });
 }

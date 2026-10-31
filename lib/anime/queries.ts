@@ -1,5 +1,5 @@
 const MEDIA_FIELDS = `
-  id title { english romaji native } coverImage { large medium }
+  id title { english romaji native } coverImage { extraLarge large medium }
   bannerImage format averageScore seasonYear episodes status genres
   nextAiringEpisode { episode airingAt }
   studios(isMain: true) { nodes { name } }`;
@@ -27,7 +27,7 @@ export const RELATIONS = `
             status
             seasonYear
             title { english romaji native }
-            coverImage { large medium }
+            coverImage { extraLarge large medium }
             bannerImage
             averageScore
           }
@@ -35,3 +35,5 @@ export const RELATIONS = `
       }
     }
   }`;
+
+export const FEATURED = `query { Page(perPage: 8) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false) { ${MEDIA_FIELDS} idMal description(asHtml: false) } } }`;

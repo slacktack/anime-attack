@@ -62,6 +62,7 @@ export type AnimeDetailPayload = {
   anime: Anime;
   malId: number | null;
   accentColor: string | null;
+  backdrop?: string | null;
   relations: RelatedAnime[];
   characters: Character[];
   recommendations: AnimeSummary[];
@@ -123,4 +124,38 @@ export function fetchEpisodeSearch(q: string): Promise<AniwatchEpisode[]> {
   return getJson<{ items: AniwatchEpisode[] }>(
     `/api/anime/latest?q=${encodeURIComponent(q)}`,
   ).then((d) => d.items ?? []);
+}
+
+/* ── Seasons ────────────────────────────────────────────────── */
+
+export type SeasonEntry = {
+  id: number;
+  title: string;
+  cover: string;
+  format: string | null;
+  year: number | null;
+  episodes: number | null;
+  status: string | null;
+  season: number | null;
+  current: boolean;
+};
+
+export function fetchSeasons(id: number): Promise<{ seasons: SeasonEntry[]; extras: SeasonEntry[] }> {
+  return getJson(`/api/anime/${id}/seasons`);
+}
+
+/* ── Featured (home hero) ───────────────────────────────────── */
+
+export type FeaturedItem = Anime & { malId: number | null; backdrop: string | null };
+
+export function fetchFeatured(): Promise<FeaturedItem[]> {
+  return getJson<{ items: FeaturedItem[] }>(`/api/anime/featured`).then((d) => d.items ?? []);
+}
+
+/* ── Episode titles + thumbnails (Kitsu) ────────────────────── */
+
+export type EpisodeMeta = { number: number; title: string | null; thumbnail: string | null; airdate: string | null };
+
+export function fetchEpisodeMeta(malId: number, from: number, to: number): Promise<EpisodeMeta[]> {
+  return getJson<{ items: EpisodeMeta[] }>(`/api/anime/episode-meta?mal=${malId}&from=${from}&to=${to}`).then((d) => d.items ?? []);
 }

@@ -26,7 +26,7 @@ export function mapMediaToSummary(media: unknown): AnimeSummary {
   const m = media as Rec;
   return AnimeSummarySchema.parse({
     id: m.id, title: title(m),
-    cover: m?.coverImage?.large || m?.coverImage?.medium || "",
+    cover: m?.coverImage?.extraLarge || m?.coverImage?.large || m?.coverImage?.medium || "",
     banner: m?.bannerImage ?? null,
     type: normType(m?.format), score: scale(m?.averageScore),
     year: typeof m?.seasonYear === "number" ? m.seasonYear : null,

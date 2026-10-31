@@ -15,7 +15,7 @@ import type { AnimeSummary } from "./types";
 type Rec = Record<string, any>;
 
 const MEDIA_FIELDS = `
-  id title { english romaji native } coverImage { large medium }
+  id title { english romaji native } coverImage { extraLarge large medium }
   bannerImage format averageScore seasonYear episodes status genres
   studios(isMain: true) { nodes { name } }`;
 
