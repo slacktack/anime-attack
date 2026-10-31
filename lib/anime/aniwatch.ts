@@ -165,10 +165,36 @@ export async function searchPosts(
   query: string,
   perPage = 20,
 ): Promise<AniwatchEpisode[]> {
-  const raw = await aniwatchFetch<WpPostRaw[]>(
-    `${API_BASE}/posts?search=${encodeURIComponent(query)}&per_page=${perPage}`,
-  );
-  return WpPostRawSchema.array().parse(raw).map(mapPost);
+  // `posts?search=` is dead on this WordPress install (always 0 rows), while
+  // `categories?search=` works when the term is hyphenated. So resolve the query
+  // to candidate series first, then pull their episodes by category id.
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const categories = await findCategory(trimmed);
+  if (categories.length === 0) return [];
+
+  const needle = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const ranked = [...categories].sort((a, b) => {
+    const aSlug = a.slug?.toLowerCase() ?? "";
+    const bSlug = b.slug?.toLowerCase() ?? "";
+    const aExact = aSlug === needle ? 0 : aSlug.includes(needle) ? 1 : 2;
+    const bExact = bSlug === needle ? 0 : bSlug.includes(needle) ? 1 : 2;
+    return aExact - bExact || (b.count ?? 0) - (a.count ?? 0);
+  });
+
+  const results: AniwatchEpisode[] = [];
+  for (const category of ranked.slice(0, 2)) {
+    if (results.length >= perPage) break;
+    try {
+      const episodes = await fetchEpisodesByCategory(category.id, perPage);
+      results.push(...episodes);
+    } catch {
+      /* skip this category */
+    }
+  }
+
+  return results.slice(0, perPage);
 }
 
 /**
@@ -180,10 +206,22 @@ export async function searchPosts(
 export async function findCategory(
   animeName: string,
 ): Promise<AniwatchCategory[]> {
-  const raw = await aniwatchFetch<AniwatchCategory[]>(
-    `${API_BASE}/categories?search=${encodeURIComponent(animeName)}&per_page=10`,
-  );
-  return AniwatchCategorySchema.array().parse(raw);
+  // The WordPress REST search only matches hyphenated slugs: `?search=one punch
+  // man` (and `one%20punch%20man`) return zero rows, `one-punch-man` returns hits.
+  const query = animeName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!query) return [];
+
+  try {
+    const raw = await aniwatchFetch<AniwatchCategory[]>(
+      `${API_BASE}/categories?search=${encodeURIComponent(query)}&per_page=10`,
+    );
+    return AniwatchCategorySchema.array().parse(raw);
+  } catch {
+    return [];
+  }
 }
 
 // ── Video extraction ────────────────────────────────────────────────────────

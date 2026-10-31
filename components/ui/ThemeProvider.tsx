@@ -19,11 +19,11 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: ThemeDefinition[] = [
-  { id: "midnight", label: "Midnight", primary: "#8b5cf6" },
+  { id: "midnight", label: "Midnight", primary: "#ff3d5f" },
   { id: "obsidian", label: "Obsidian", primary: "#2dd4bf" },
-  { id: "neon", label: "Neon", primary: "#d946ef" },
+  { id: "neon", label: "Neon", primary: "#e879f9" },
   { id: "sakura", label: "Sakura", primary: "#ec4899" },
-  { id: "paper", label: "Paper", primary: "#6d28d9" },
+  { id: "paper", label: "Paper", primary: "#d6203f" },
 ];
 
 const STORAGE_KEY = "ac.theme";

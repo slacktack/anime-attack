@@ -32,20 +32,18 @@ export function ThemeSwitcher() {
         aria-label="Change theme"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.06] transition-colors hover:bg-white/[0.1]"
+        className="grid h-11 w-11 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white"
       >
-        <Palette size={18} />
+        <Palette size={20} />
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label="Choose theme"
-          className="app-dock absolute right-0 top-12 z-[60] w-60 origin-top-right rounded-2xl p-2"
+          className="app-dock absolute right-0 top-13 z-[60] w-56 origin-top-right rounded-xl p-1.5 text-white"
         >
-          <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/35">
-            Appearance
-          </p>
+          <p className="px-2.5 pb-1 pt-1.5 text-[12px] font-semibold text-white/45">Theme</p>
           {themes.map((item) => {
             const active = item.id === theme;
             return (
@@ -58,12 +56,12 @@ export function ThemeSwitcher() {
                   setTheme(item.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left text-sm font-semibold transition-colors ${
+                className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm font-semibold transition-colors ${
                   active ? "bg-white/[0.09]" : "hover:bg-white/[0.06]"
                 }`}
               >
                 <span
-                  className="h-6 w-6 flex-none rounded-full border border-white/15 shadow-inner"
+                  className="h-5 w-5 flex-none rounded-full border border-white/15 shadow-inner"
                   style={{ backgroundColor: item.primary }}
                   aria-hidden
                 />

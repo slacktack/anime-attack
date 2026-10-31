@@ -4,12 +4,12 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { PageTransition } from "@/components/ui/PageTransition";
-import { ScrollProgress } from "@/components/ui/ScrollProgress";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
 import { AppHeader } from "@/components/ui/AppHeader";
 
 const display = Bricolage_Grotesque({
   subsets: ["latin"],
+  axes: ["wdth", "opsz"],
   variable: "--font-display",
   display: "swap",
 });
@@ -42,7 +42,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0e0e10" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0e" },
     { media: "(prefers-color-scheme: light)", color: "#f4efe1" },
   ],
 };
@@ -55,10 +55,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-[100dvh] overflow-x-hidden bg-ink-solid pb-[calc(7rem+env(safe-area-inset-bottom))] text-white antialiased">
+      <body className="min-h-[100dvh] overflow-x-clip bg-ink-solid pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-white antialiased lg:pb-0">
         <ThemeProvider>
-          <div className="aa-aurora" aria-hidden />
-          <ScrollProgress />
           <Providers>
             <AppHeader />
             <PageTransition>{children}</PageTransition>

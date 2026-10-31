@@ -45,34 +45,44 @@ function episodeFromSlug(slug: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function seasonOf(text: string): string | null {
+  const match =
+    text.match(/\b(?:season|part|cour)\s*(\d+)\b/i) ??
+    text.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
+  return match ? match[1] : null;
+}
+
 function pickBest(results: AnimeSummary[], title: string): AnimeSummary | null {
   if (results.length === 0) return null;
   const needle = title.toLowerCase();
+  const wantedSeason = seasonOf(title);
+
+  const sameSeason = (candidate: AnimeSummary) => {
+    if (!wantedSeason) return true;
+    return seasonOf(candidate.title) === wantedSeason;
+  };
+
+  const exact = results.find((r) => r.title.toLowerCase() === needle);
+  if (exact) return exact;
+
+  const sameSeasonAll = results.filter(sameSeason);
+  if (sameSeasonAll.length > 0) {
+    // Prefer the earliest release of that season: "One Punch Man Season 3 Part 2"
+    // is a later, often unaired, entry and would resolve the wrong content.
+    return [...sameSeasonAll].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))[0];
+  }
+
   return (
-    results.find((r) => r.title.toLowerCase() === needle) ??
-    results.find((r) => needle.includes(r.title.toLowerCase())) ??
-    results.find((r) => r.title.toLowerCase().includes(needle)) ??
-    results[0]
+    results.find((r) => r.title.toLowerCase().includes(needle)) ?? results[0]
   );
 }
 
-async function fetchPostTitle(slug: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `${BASE}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&per_page=1`,
-      {
-        headers: { "User-Agent": UA, Accept: "application/json", Referer: `${BASE}/` },
-        cache: "no-store",
-        signal: AbortSignal.timeout(12_000),
-      },
-    );
-    if (!res.ok) return null;
-    const posts = (await res.json()) as WpPost[];
-    const rendered = posts?.[0]?.title?.rendered;
-    return rendered ? cleanTitle(rendered) : null;
-  } catch {
-    return null;
-  }
+/**
+ * `posts?slug=` is dead on the current aniwatch install (always 0 rows), so the
+ * title is derived from the slug itself, which is already the post title.
+ */
+function titleFromSlug(slug: string): string {
+  return cleanTitle(slug.replace(/-/g, " "));
 }
 
 export async function resolveSlugToMal(slug: string): Promise<SlugTarget | null> {
@@ -83,12 +93,8 @@ export async function resolveSlugToMal(slug: string): Promise<SlugTarget | null>
   const fallbackEpisode = episodeFromSlug(slug) ?? 1;
   const candidates: string[] = [];
 
-  const postTitle = await fetchPostTitle(slug);
-  if (postTitle) candidates.push(postTitle);
-
-  // Derive a readable title straight from the slug as a second attempt.
-  const fromSlug = cleanTitle(slug.replace(/-/g, " "));
-  if (fromSlug && fromSlug !== postTitle) candidates.push(fromSlug);
+  const fromSlug = titleFromSlug(slug);
+  if (fromSlug) candidates.unshift(fromSlug);
 
   let value: SlugTarget | null = null;
 

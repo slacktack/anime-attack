@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { fetchMegaSource, resolveTargetFromSlug, type MegaAudio } from "@/lib/anime/mega";
 import { resolveSlugToMal } from "@/lib/anime/slug-resolve";
+import { extractVideoUrl } from "@/lib/anime/aniwatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,30 @@ export async function GET(request: NextRequest) {
       provider,
       refresh,
     });
+
+    if (result.status === "ok" || result.status === "countdown") return noStore(result);
+
+    // megavid has no copy of this episode. aniwatch still publishes it through a
+    // blogger/JW Player indirection that resolves to a signed Google Video MP4,
+    // so use that before giving up. Only possible when we know the episode slug.
+    if (slug && (result.status === "missing" || result.status === "error")) {
+      try {
+        const fallback = await extractVideoUrl(slug);
+        if (fallback.videoUrl) {
+          return noStore({
+            ...result,
+            status: "ok",
+            type: "mp4",
+            source: fallback.videoUrl,
+            tracks: [],
+            provider: "aniwatch",
+            message: "Playing from the aniwatch mirror (single quality).",
+          });
+        }
+      } catch {
+        /* keep the original failure below */
+      }
+    }
 
     return noStore(result);
   } catch (error) {

@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Play, Star, Tv, Clapperboard, Info } from "lucide-react";
+import { CalendarClock, Play, Star } from "lucide-react";
 import { fetchAnimeDetail } from "@/lib/client/api";
 import { findCategory } from "@/lib/anime/aniwatch";
 import { htmlToText } from "@/lib/ui/htmlToText";
-import { Carousel } from "@/components/ui/Carousel";
 import { PosterCard } from "@/components/ui/PosterCard";
-import { Card3D } from "@/components/ui/Card3D";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { ProgressControl } from "@/components/ui/ProgressControl";
 import { AiPanel } from "@/components/screens/AiPanel";
@@ -51,8 +49,7 @@ function CarouselSkeleton({ count = 6, wide = false }: { count?: number; wide?: 
 }
 
 export function AnimeDetail({ id }: { id: number }) {
-  const [storyOpen, setStoryOpen] = useState(false);
-  const [tab, setTab] = useState<"episodes" | "about" | "ai">("episodes");
+  const [tab, setTab] = useState<"episodes" | "more" | "about" | "ai">("episodes");
   const [resumeEpisode, setResumeEpisode] = useState(0);
 
   useEffect(() => setResumeEpisode(getSpoilerCeiling(id)), [id]);
@@ -110,307 +107,246 @@ export function AnimeDetail({ id }: { id: number }) {
 
   if (isLoading || !anime) {
     return (
-      <div className="px-4 pb-10 pt-3">
-        <div className="skeleton h-[300px] w-full rounded-3xl" />
-        <div className="skeleton mt-3 h-[86px] w-full" />
-        <div className="skeleton mt-3 h-14 w-full" />
-        <div className="skeleton mt-3 h-40 w-full" />
+      <div className="pb-16">
+        <div className="skeleton h-[62svh] min-h-[460px] w-full rounded-none lg:h-[min(78vh,46vw)]" />
+        <div className="aa-gutter mt-6 flex flex-col gap-3">
+          <div className="skeleton h-10 w-72" />
+          <div className="skeleton h-40 w-full" />
+        </div>
       </div>
     );
   }
 
   const malId = detail.data?.malId ?? null;
   const isMovie = anime.type === "MOVIE" || anime.episodes === 1;
+  const startEp = Math.max(1, resumeEpisode);
   const watchQuery = new URLSearchParams({ audio: "sub" });
   if (malId) watchQuery.set("mal", String(malId));
-  watchQuery.set("ep", "1");
-  const watchHref = `/watch/${slugify(anime.title)}-episode-1?${watchQuery.toString()}`;
+  watchQuery.set("ep", String(startEp));
+  const watchHref = `/watch/${slugify(anime.title)}-episode-${startEp}?${watchQuery.toString()}`;
   const banner = anime.bannerImage || anime.banner || anime.cover;
   const story = anime.description ? htmlToText(anime.description) : "";
-  const longStory = story.length > 320;
   const status = statusLabel(anime.status);
   const notAired = anime.status === "NOT_YET_RELEASED";
+  const playLabel = isMovie
+    ? "Play movie"
+    : resumeEpisode > 0
+      ? `Resume episode ${startEp}`
+      : notAired
+        ? "Preview episode 1"
+        : "Play episode 1";
+
+  const tabs = [
+    ["episodes", isMovie ? "Watch" : "Episodes"],
+    ["more", "More like this"],
+    ["about", "Story & cast"],
+    ["ai", "AI recap"],
+  ] as const;
 
   return (
-    <div className="flex flex-col gap-3 px-4 pb-10 pt-3">
-      {/* ── Cinematic hero ───────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-[28px] border border-nb-border bg-ink-800 shadow-[0_40px_80px_-46px_rgba(0,0,0,0.9)]">
-        <div className="absolute inset-0">
+    <div className="pb-16">
+      {/* billboard */}
+      <section className="on-media relative h-[64svh] min-h-[480px] w-full overflow-hidden bg-black lg:h-[min(80vh,46vw)] lg:min-h-[560px]">
+        <picture className="absolute inset-0">
+          <source media="(min-width: 1024px)" srcSet={banner} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={banner}
-            alt=""
-            className="h-full w-full scale-105 object-cover opacity-55"
-            style={{ filter: "saturate(115%)" }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[color:var(--ink-solid)] via-[color:var(--ink-solid)]/78 to-[color:var(--ink-solid)]/15" />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 80% at 0% 100%, color-mix(in oklab, var(--accent-purple) 24%, transparent), transparent 62%)",
-            }}
-          />
-        </div>
+          <img src={anime.cover} alt="" className="aa-xfade h-full w-full object-cover object-[50%_22%]" />
+        </picture>
+        <div className="absolute inset-0 hidden bg-[linear-gradient(77deg,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.6)_32%,transparent_66%)] lg:block" />
+        <div className="absolute inset-x-0 bottom-0 h-[70%] bg-[linear-gradient(to_top,var(--ink-solid)_0%,color-mix(in_oklab,var(--ink-solid)_80%,transparent)_32%,transparent_100%)] lg:h-[45%]" />
 
-        <div className="relative flex flex-col gap-4 p-4 pt-16 sm:p-6 sm:pt-24">
-          <div className="flex items-end gap-3.5">
-            <div className="relative shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={anime.cover}
-                alt={anime.title}
-                className="h-[148px] w-[104px] rounded-2xl border border-white/20 object-cover shadow-[0_24px_50px_-18px_rgba(0,0,0,0.95)] sm:h-[220px] sm:w-[156px]"
-              />
+        <div className="aa-gutter absolute inset-x-0 bottom-0 pb-7 lg:pb-14">
+          <div className="flex max-w-[720px] flex-col">
+            <h1
+              className={`aa-billboard-title line-clamp-3 text-white drop-shadow-[0_4px_30px_rgba(0,0,0,0.5)] ${
+                anime.title.length > 44
+                  ? "text-[34px] sm:text-[46px] lg:text-[clamp(46px,4vw,68px)]"
+                  : "text-[44px] sm:text-[58px] lg:text-[clamp(60px,5.6vw,104px)]"
+              }`}
+            >
+              {anime.title}
+            </h1>
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] font-medium text-white/80 lg:text-[15px]">
               {anime.score != null && (
-                <span className="absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-amber-300/30 bg-[color:var(--ink-900)]/90 px-2 py-1 text-[11px] font-black text-amber-300 shadow-lg backdrop-blur">
-                  <Star size={10} fill="currentColor" /> {anime.score}
+                <span className="flex items-center gap-1 font-bold text-accent-gold">
+                  <Star size={14} fill="currentColor" /> {anime.score.toFixed(1)}
                 </span>
               )}
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5 pb-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {status && (
-                  <span
-                    className={`nb-tag ${
-                      anime.status === "RELEASING"
-                        ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-300"
-                        : notAired
-                          ? "border-sky-300/25 bg-sky-400/12 text-sky-300"
-                          : ""
-                    }`}
-                  >
-                    {anime.status === "RELEASING" && (
-                      <span className="mr-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-soft" />
-                    )}
-                    {status}
-                  </span>
-                )}
-                {anime.type && <span className="nb-tag">{anime.type}</span>}
-                {anime.seasonYear && <span className="nb-tag">{anime.seasonYear}</span>}
-              </div>
-
-              <h1 className="font-display text-[26px] font-bold leading-[1.05] tracking-tight sm:text-[40px]">
-                {anime.title}
-              </h1>
-
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] font-semibold text-white/45">
-                <span>
-                  {anime.episodes
-                    ? `${anime.episodes} episode${anime.episodes === 1 ? "" : "s"}`
-                    : isMovie
-                      ? "Feature film"
-                      : "Episodes"}
+              {status && (
+                <span
+                  className={`font-semibold ${
+                    anime.status === "RELEASING" ? "text-emerald-400" : notAired ? "text-sky-300" : ""
+                  }`}
+                >
+                  {status}
                 </span>
-                {anime.studios.length > 0 && (
-                  <>
-                    <span className="h-1 w-1 rounded-full bg-white/25" />
-                    <span className="truncate">{anime.studios[0]}</span>
-                  </>
-                )}
+              )}
+              {anime.seasonYear && <span>{anime.seasonYear}</span>}
+              {anime.type && <span>{anime.type === "MOVIE" ? "Movie" : anime.type}</span>}
+              {anime.episodes != null && anime.episodes > 1 && <span>{anime.episodes} episodes</span>}
+              {anime.studios[0] && <span className="text-white/60">{anime.studios[0]}</span>}
+            </div>
+
+            {anime.genres.length > 0 && (
+              <p className="mt-2 text-[13.5px] text-white/65">{anime.genres.slice(0, 5).join("  •  ")}</p>
+            )}
+
+            {story && (
+              <p className="mt-4 hidden max-w-[60ch] text-[15px] leading-relaxed text-white/80 lg:line-clamp-3">
+                {story.replace(/\s+/g, " ")}
               </p>
-            </div>
-          </div>
+            )}
 
-          {anime.nextAiringEpisode && (
-            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 backdrop-blur">
-              <CalendarClock size={15} className="shrink-0 text-sky-300" />
-              <p className="text-[12px] font-semibold text-white/70">
-                Episode {anime.nextAiringEpisode.episode} airs{" "}
-                <Countdown airingAt={anime.nextAiringEpisode.airingAt} />
+            <div className="mt-5 flex items-center gap-2.5 lg:gap-3">
+              <Link
+                href={watchHref}
+                prefetch={false}
+                className="aa-cta flex-1 sm:flex-none lg:min-h-[52px] lg:px-8 lg:text-[17px]"
+              >
+                <Play size={20} fill="currentColor" />
+                {playLabel}
+              </Link>
+              <FavoriteButton anime={anime} iconOnly />
+            </div>
+
+            {anime.nextAiringEpisode && (
+              <p className="mt-4 flex items-center gap-2 text-[13.5px] font-medium text-white/75">
+                <CalendarClock size={15} className="shrink-0 text-sky-300" />
+                Episode {anime.nextAiringEpisode.episode} airs <Countdown airingAt={anime.nextAiringEpisode.airingAt} />
               </p>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Link
-              href={watchHref}
-              prefetch={false}
-              className="nb-btn nb-btn-accent nb-btn-lg min-h-[52px] flex-1"
-            >
-              <Play size={18} fill="currentColor" />
-              {isMovie ? "Watch movie" : notAired ? "Preview episode 1" : "Watch episode 1"}
-            </Link>
-            <FavoriteButton anime={anime} iconOnly />
+            )}
           </div>
-
-          {anime.genres.length > 0 && (
-            <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
-              {anime.genres.slice(0, 8).map((genre) => (
-                <span key={genre} className="nb-tag shrink-0">
-                  {genre}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </section>
 
-      {/* ── Segmented tabs ───────────────────────────────────── */}
-      <div className="sticky top-[62px] z-30 -mx-4 px-4 py-2 backdrop-blur-xl">
-        <div className="flex gap-1 rounded-2xl border border-white/10 bg-[color:var(--ink-900)]/70 p-1">
-          {(
-            [
-              ["episodes", "Episodes"],
-              ["about", "About"],
-              ["ai", "AI recap"],
-            ] as const
-          ).map(([key, label]) => (
+      {/* tabs */}
+      <div className="sticky top-[calc(var(--header-h)+env(safe-area-inset-top))] z-30 border-b border-[var(--glass-border)] bg-ink-solid/95 backdrop-blur-xl [-webkit-backdrop-filter:blur(24px)]">
+        <div role="tablist" className="aa-gutter no-scrollbar flex gap-6 overflow-x-auto lg:gap-9">
+          {tabs.map(([key, label]) => (
             <button
               key={key}
               type="button"
+              role="tab"
               onClick={() => setTab(key)}
-              aria-pressed={tab === key}
-              className={`flex-1 rounded-xl py-2 text-[12.5px] font-bold transition-all ${
-                tab === key
-                  ? "bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white shadow-[0_12px_26px_-16px_rgba(139,92,246,0.9)]"
-                  : "text-white/55 hover:text-white/80"
+              aria-selected={tab === key}
+              className={`relative shrink-0 py-3.5 text-[14.5px] font-semibold transition-colors lg:text-[15.5px] ${
+                tab === key ? "text-white" : "text-white/50 hover:text-white/80"
               }`}
             >
               {label}
+              {tab === key && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t bg-accent-purple" />}
             </button>
           ))}
         </div>
       </div>
 
-      {tab === "episodes" && (
-        <section id="episodes" className="aa-card p-4" data-card-accent="progress">
-          <div className="mb-3">
-            <SeasonSwitcher
-              id={id}
-              title={anime.title}
-              year={anime.seasonYear}
-              type={anime.type}
+      <div className="aa-gutter pt-6 lg:pt-8">
+        {tab === "episodes" && (
+          <section id="episodes" className="flex flex-col gap-4">
+            <SeasonSwitcher id={id} title={anime.title} year={anime.seasonYear} type={anime.type} />
+            <EpisodeList
+              malId={malId}
+              animeTitle={anime.title}
+              totalEpisodes={anime.episodes}
+              aniwatchCategoryId={aniwatchCat.data?.id}
+              aniwatchCategoryName={aniwatchCat.data?.name}
+              animeStatus={anime.status}
+              nextAiring={anime.nextAiringEpisode}
+              fallbackHref={watchHref}
+              isMovie={isMovie}
+              resumeEpisode={resumeEpisode}
             />
-          </div>
-          <EpisodeList
-            malId={malId}
-            animeTitle={anime.title}
-            totalEpisodes={anime.episodes}
-            aniwatchCategoryId={aniwatchCat.data?.id}
-            aniwatchCategoryName={aniwatchCat.data?.name}
-            animeStatus={anime.status}
-            nextAiring={anime.nextAiringEpisode}
-            fallbackHref={watchHref}
-            isMovie={isMovie}
-            resumeEpisode={resumeEpisode}
-          />
-        </section>
-      )}
-
-      {tab === "about" && (
-        <div className="flex flex-col gap-3">
-          {story && (
-            <section className="aa-card p-4">
-              <div className="aa-section">
-                <h2 className="aa-section-title">
-                  <Info size={15} className="text-accent-blue" />
-                  Story
-                </h2>
-              </div>
-              <p
-                className={`whitespace-pre-wrap text-[13.5px] leading-relaxed text-white/65 ${
-                  !storyOpen && longStory ? "line-clamp-6" : ""
-                }`}
-              >
-                {story}
-              </p>
-              {longStory && (
-                <button
-                  type="button"
-                  onClick={() => setStoryOpen((v) => !v)}
-                  className="mt-2 text-[12px] font-bold text-accent-purple"
-                >
-                  {storyOpen ? "Show less" : "Read more"}
-                </button>
-              )}
-            </section>
-          )}
-
-          {anime.studios.length > 0 && (
-            <section className="aa-card p-4">
-              <div className="aa-section">
-                <h2 className="aa-section-title">
-                  <Clapperboard size={15} className="text-accent-crimson" />
-                  Studio
-                </h2>
-              </div>
-              <p className="text-[13px] font-semibold text-white/70">
-                {anime.studios.join(", ")}
-              </p>
-            </section>
-          )}
-
-          <ProgressControl anime={anime} maxEpisodes={anime.episodes} />
-
-          <section data-card-accent="characters">
-            <div className="aa-section">
-              <h2 className="aa-section-title">
-                <Clapperboard size={15} className="text-accent-crimson" />
-                Characters
-              </h2>
-            </div>
-            {chars.isLoading ? (
-              <CarouselSkeleton count={5} wide />
-            ) : chars.data && chars.data.length > 0 ? (
-              <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
-                {chars.data.map((c) => (
-                  <Link
-                    key={c.id}
-                    href={`/character/${c.id}`}
-                    className="block w-[92px] shrink-0"
-                  >
-                    <Card3D className="overflow-hidden rounded-2xl border border-nb-border bg-ink-700">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={c.image ?? ""}
-                        alt={c.name}
-                        loading="lazy"
-                        className="aspect-[2/3] w-full object-cover"
-                      />
-                      <p className="line-clamp-2 px-2 py-1.5 text-[10.5px] font-semibold leading-tight">
-                        {c.name}
-                      </p>
-                    </Card3D>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
-                No cast data for this title yet.
-              </p>
-            )}
           </section>
-        </div>
-      )}
+        )}
 
-      {tab === "ai" && (
-        <div className="flex flex-col gap-3">
-          <AiPanel anime={anime} />
-          <section data-card-accent="recommend">
-            <div className="aa-section">
-              <h2 className="aa-section-title">
-                <Star size={15} className="text-accent-gold" />
-                You might like
-              </h2>
-            </div>
+        {tab === "more" && (
+          <section>
             {recs.isLoading ? (
               <CarouselSkeleton />
             ) : recs.data && recs.data.length > 0 ? (
-              <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+              <div className="grid grid-cols-3 gap-x-2.5 gap-y-6 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
                 {recs.data.map((a) => (
-                  <PosterCard key={a.id} anime={a} />
+                  <PosterCard key={a.id} anime={a} fluid />
                 ))}
               </div>
             ) : (
-              <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
-                No recommendations available.
-              </p>
+              <p className="py-10 text-center text-[14px] text-muted">No recommendations for this title yet.</p>
             )}
           </section>
-        </div>
-      )}
+        )}
+
+        {tab === "about" && (
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="flex flex-col gap-8">
+              {story && (
+                <section>
+                  <h2 className="aa-section-title mb-3">Story</h2>
+                  <p className="max-w-[72ch] whitespace-pre-wrap text-[15px] leading-relaxed text-white/75">{story}</p>
+                </section>
+              )}
+              <section>
+                <h2 className="aa-section-title mb-3">Characters</h2>
+                {chars.isLoading ? (
+                  <CarouselSkeleton count={5} wide />
+                ) : chars.data && chars.data.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-x-2.5 gap-y-5 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+                    {chars.data.map((c) => (
+                      <Link key={c.id} href={`/character/${c.id}`} className="group block">
+                        <div className="poster-frame aspect-[2/3]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={c.image ?? ""} alt={c.name} loading="lazy" className="h-full w-full object-cover" />
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-[13px] font-semibold leading-snug text-white/85 group-hover:text-white">
+                          {c.name}
+                        </p>
+                        {c.role && <p className="text-[12px] capitalize text-muted">{c.role.toLowerCase()}</p>}
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-6 text-[14px] text-muted">No cast data for this title yet.</p>
+                )}
+              </section>
+            </div>
+            <aside className="flex flex-col gap-6 text-[14px]">
+              <dl className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-3">
+                {anime.studios.length > 0 && (
+                  <>
+                    <dt className="text-muted">Studio</dt>
+                    <dd className="font-medium">{anime.studios.join(", ")}</dd>
+                  </>
+                )}
+                {status && (
+                  <>
+                    <dt className="text-muted">Status</dt>
+                    <dd className="font-medium">{status}</dd>
+                  </>
+                )}
+                {anime.episodes != null && (
+                  <>
+                    <dt className="text-muted">Episodes</dt>
+                    <dd className="font-medium">{anime.episodes}</dd>
+                  </>
+                )}
+                {anime.genres.length > 0 && (
+                  <>
+                    <dt className="text-muted">Genres</dt>
+                    <dd className="font-medium">{anime.genres.join(", ")}</dd>
+                  </>
+                )}
+              </dl>
+              <ProgressControl anime={anime} maxEpisodes={anime.episodes} />
+            </aside>
+          </div>
+        )}
+
+        {tab === "ai" && (
+          <div className="max-w-4xl">
+            <AiPanel anime={anime} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,48 +1,59 @@
 import Link from "next/link";
-import { Play, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import type { AnimeSummary } from "@/lib/anime/types";
 
-export function PosterCard({ anime }: { anime: AnimeSummary }) {
+export function PosterCard({
+  anime,
+  href,
+  badge,
+  progress,
+  fluid = false,
+}: {
+  anime: AnimeSummary;
+  href?: string;
+  badge?: string;
+  progress?: number;
+  fluid?: boolean;
+}) {
   return (
     <Link
-      href={`/anime/${anime.id}`}
+      href={href ?? `/anime/${anime.id}`}
       prefetch={false}
-      className="group block w-[124px] shrink-0 sm:w-[150px]"
+      className={`group block shrink-0 ${fluid ? "w-full" : "aa-poster-w"}`}
     >
-      <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-ink-800 shadow-[0_18px_36px_-28px_rgba(0,0,0,0.95)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white/25">
+      <div className="poster-frame aspect-[2/3] ring-1 ring-inset ring-white/[0.06]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={anime.cover}
           alt={anime.title}
           loading="lazy"
-          className="aspect-[2/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+          decoding="async"
+          className="h-full w-full object-cover"
         />
-        <div className="aa-scrim-soft pointer-events-none" />
-
-        {anime.score != null && (
-          <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-lg bg-black/55 px-1.5 py-0.5 text-[9.5px] font-black text-amber-300 backdrop-blur">
-            <Star size={8} fill="currentColor" />
-            {anime.score}
+        {badge && (
+          <span className="on-media absolute left-1.5 top-1.5 rounded-[5px] bg-black/75 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
+            {badge}
           </span>
         )}
-
-        <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-white/18 text-white ring-1 ring-white/35 backdrop-blur-md">
-            <Play size={13} fill="currentColor" />
+        {progress != null && (
+          <span className="absolute inset-x-0 bottom-0 h-[3px] bg-white/20">
+            <span className="block h-full bg-accent-purple" style={{ width: `${Math.max(4, Math.min(100, progress))}%` }} />
           </span>
-        </span>
-
-        <div className="absolute inset-x-0 bottom-0 p-2">
-          <p className="line-clamp-2 font-display text-[11px] font-bold leading-tight text-white">
-            {anime.title}
-          </p>
-          {(anime.type || anime.year) && (
-            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-white/40">
-              {[anime.type, anime.year].filter(Boolean).join(" · ")}
-            </p>
-          )}
-        </div>
+        )}
       </div>
+      <p className="mt-2 line-clamp-2 text-[13px] font-semibold leading-snug text-white/90 transition-colors group-hover:text-white">
+        {anime.title}
+      </p>
+      <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
+        {anime.score != null && (
+          <span className="flex items-center gap-0.5 font-semibold text-accent-gold">
+            <Star size={10} fill="currentColor" />
+            {anime.score.toFixed(1)}
+          </span>
+        )}
+        {anime.year && <span>{anime.year}</span>}
+        {anime.type && anime.type !== "TV" && <span>{anime.type === "MOVIE" ? "Movie" : anime.type}</span>}
+      </p>
     </Link>
   );
 }

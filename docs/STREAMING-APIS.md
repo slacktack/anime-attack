@@ -1,906 +1,1026 @@
-# Streaming, Metadata and Manga APIs — Verified Reference
+# Anime Attack — Streaming, Metadata and Manga API Reference
 
-Audience: a developer building a **mobile APK client** for Anime Attack (repo package `anime-companion`).
-Everything here is extracted from the shipped code in this repository plus live HTTP probes made on
-**2026-10-31 (UTC)**. Claims that rest on code alone and could not be re-confirmed on the wire are marked
-**unverified**.
+Reference for **Anime Attack** (`anime-companion`): Next.js 15 App Router, served on `http://localhost:3100`.
+Repo `/Users/tushargautam/Documents/Anime App`, revision `101941d`. Live probes: **2026-10-31 (UTC)**.
+Stack: `next 15.5.20`, `react 19.1.0`, `hls.js ^1.7.4`, `zod ^4.4.3`, `@tanstack/react-query ^5.101.2`.
 
-Repository revision used: `ed64868` — "feat: premium glass revamp, season switcher, streaming + manga pipelines".
+**Part I** documents the app's own contract (`app/api/**`, `lib/client/api.ts`); **Part II** documents every
+upstream, including the ones that were rejected.
 
-Evidence tags: `[code]` = traceable to a file here · `[live]` = observed with curl on 2026-10-31 ·
-`[unverified]` = neither.
+| Tag | Meaning |
+| --- | --- |
+| `[code]` | Traceable to a named file in the repo; behaviour follows from the source text. |
+| `[live]` | Observed with `curl` on 2026-10-31 against the dev server and the real upstreams. |
+| `[unverified]` | Neither — stated in the brief, inferred, or not reproducible. |
+
+Where `[code]` and `[live]` disagree, both are printed. The working tree moved during writing (the
+`PROVIDER_ORDER` trim, category-based feed search, the aniwatch mirror fallback), so `[code]` follows the tree as
+handed over while `[live]` is a timestamped snapshot — and the dev server was no longer listening on port 3100 when
+this document was finalised.
+
+**Contents** — *Internal (Part I):* [1 conventions](#1-conventions) · [2 discover](#2-get-apianimediscover) ·
+[3 detail](#3-get-apianimeid) · [4 episodes](#4-get-apianimeepisodes) · [5 latest](#5-get-apianimelatest) ·
+[6 source](#6-get-apianimesource) · [7 characters](#7-get-apicharacters--apicharactersid) · [8 schedule](#8-get-apischedule) ·
+[9 manga](#9-manga-endpoints) · [10 media proxy](#10-gethead-apiproxymedia) · [11 aniwatch/quotes](#11-apiproxyaniwatch-and-apiproxyquotes) ·
+[12 ai](#12-post-apiai) · [13 client wrapper](#13-libclientapits) · [14 master table](#14-master-table)
+*Upstreams (Part II):* [15 AniList](#15-anilist-graphql) · [16 Jikan](#16-jikan) · [17 Kitsu](#17-kitsu) · [18 quotes](#18-quotes-animechan) ·
+[19 aniwatch](#19-aniwatch-wordpress-api) · [20 pipeline](#20-streaming-pipeline-aniwatch--player--megavid) · [21 gate](#21-the-referercors-gate) ·
+[22 subtitles](#22-subtitle-tracks) · [23 megaplay/anikoto](#23-alternative-source-family-megaplay--anikoto) · [24 MangaDex](#24-mangadex) ·
+[25 dead](#25-dead-and-rejected-endpoints) · [26 fixtures](#26-verified-title-fixtures) · [27 playbook](#27-failure-playbook) ·
+[28 mobile](#28-mobile--apk-reuse-notes) · [29 legal](#29-legal-caveats) · [A checks](#appendix-a--re-running-the-checks) ·
+[B unverified](#appendix-b--explicitly-unverified)
 
 ---
 
-## 1. Overview and architecture
+# Part I — Internal API
 
-The browser never talks to a stream CDN directly for anything CORS- or referer-gated; it talks to route
-handlers that act as a thin, cache-aware proxy layer.
+## 1. Conventions
 
-```
- ┌──────────── client (browser today, APK later) ────────────┐
- │ /watch/[slug] → WatchView (client component)              │
- │   ├─ GET /api/anime/source?slug&mal&ep&audio&provider     │
- │   ├─ <VideoPlayer> + hls.js  src=/api/proxy/media?url&ref&mode
- │   └─ <track src=…>           /api/proxy/media?url=…&mode=smart
- └───────────────────────────┬───────────────────────────────┘
-                             │ same-origin (JSON / m3u8 / vtt / ts)
- ┌───────────────────────────▼───────────────────────────────┐
- │ Next route handlers (Node runtime)                        │
- │  /api/anime/source        → lib/anime/mega.ts             │
- │  /api/proxy/media         → playlist rewrite / passthrough │
- │  /api/proxy/aniwatch      → WP REST passthrough (browser)  │
- │  /api/manga/*             → search, detail, chapter, image │
- └───┬───────────────────┬───────────────────┬───────────────┘
-     ▼                   ▼                   ▼
- ┌─────────────┐ ┌──────────────────┐ ┌──────────────────────────────────┐
- │ Metadata    │ │ Resolution       │ │ Media (fetched with Referer + UA) │
- │ anilist     │ │ aniwatchtv.by    │ │ cp.megavid.buzz   HLS playlists   │
- │ jikan       │ │  /<slug>/ iframe │ │ cdn.megavid.buzz  MPEG-TS segments│
- │ kitsu       │ │ megavid.buzz     │ │ megavid.buzz/vid  obfuscated segs │
- │ wp-json     │ │  /mal/{m}/{e}/   │ │ megavid.buzz/sub  subtitles .vtt  │
- │ mangadex    │ │  {sub|dub}/source│ │ s-90.megavid.se   NXDOMAIN, dead  │
- └─────────────┘ └──────────────────┘ │ *.mangadex.network, uploads…      │
-                                      └──────────────────────────────────┘
-```
+The browser never touches a gated CDN directly: `lib/client/api.ts` and hls.js call route handlers, which add
+headers a page cannot forge. JSON routes wrap AniList, Jikan, aniwatch WordPress, megavid, MangaDex and Gemini;
+`/api/proxy/media` carries megavid playlists and MPEG-TS segments.
 
-Two rules explain almost every design decision:
+**Error shape.** `{ "error": "<message>" }`, plus `items: []` on list endpoints so a client can render an empty
+state without branching on status `[code]`. `/api/anime/source` is the exception: it mirrors the megavid
+contract and uses `{ status, message }`. Codes: `200` ok, `400` bad/missing parameter, `403` AI cross-origin
+only, `404` unresolvable slug, `502` upstream failure.
 
-1. **Anything origin-gated must be proxied.** `megavid.buzz` returns `403` to a browser from another origin,
-   and some assets ship `Access-Control-Allow-Origin: https://megavid.buzz` `[live]`.
-2. **Everything else stays direct** so the proxy (a cold serverless function) is not in the hot path for
-   multi-megabyte segments — at commit `ed64868`, `smart` mode leaves segment URIs absolute `[code]`. A later
-   working-tree change inverts this default (see the snapshot warning in 4.2).
+**Cache model** `[code]`: `public, s-maxage=N, stale-while-revalidate=M` for metadata, `no-store, max-age=0` for
+stream resolution and chapter pages, plus `next: { revalidate: N }` on cacheable internal fetches.
 
----
+**Durations** `[code]` — every route is `runtime = "nodejs"`; `maxDuration` is 30 except `anime/source` (60,
+`force-dynamic`), `manga/chapter/[id]` (45) and `proxy/media` (60, `force-dynamic`), and the three remaining routes
+leave it at the default. Cache TTLs per route are in §14. `vercel.json` pins region `bom1` and caps `proxy/media`
+at **30 s** although the route declares 60, so a long segment fetch can be cut short in production only.
 
-## 2. Data-layer APIs
+## 2. `GET /api/anime/discover`
 
-### 2.1 AniList GraphQL — primary metadata
+One endpoint for home, search and browse. Wraps AniList only.
 
-| Item | Value |
-| --- | --- |
-| Endpoint | `https://graphql.anilist.co`, **POST only** (`GET` → `404`) `[live]` |
-| Headers | `Content-Type: application/json`, `Accept: application/json` `[code]` `lib/anime/anilist.ts` |
-| Body | `{ query, variables }` |
-| Cache | `next: { revalidate: 300 }` (5 min) |
-| Errors | `!res.ok` → `throw AniList ${status}`; any `json.errors` key → `throw "AniList query error"` |
-| Rate limit | `x-ratelimit-limit: 30`, `x-ratelimit-remaining: 26` `[live]` — the **degraded 30/min tier**, not the documented 90/min |
-| Status | reachable, correct payloads `[live]` |
-
-Queries in use `[code]` `lib/anime/queries.ts` — shared field set:
-
-```graphql
-# MEDIA_FIELDS
-id title { english romaji native } coverImage { large medium }
-bannerImage format averageScore seasonYear episodes status genres
-nextAiringEpisode { episode airingAt } studios(isMain: true) { nodes { name } }
-
-Page(perPage: 20) { media(sort: TRENDING_DESC, type: ANIME) { … } }
-Page(perPage: 20) { media(status: RELEASING, sort: POPULARITY_DESC, type: ANIME) { … } }
-Page(perPage: 20) { media(format: MOVIE, sort: POPULARITY_DESC, type: ANIME) { … } }
-query ($q: String, $page: Int) { Page(page: $page, perPage: 20) { media(search: $q, type: ANIME, sort: SEARCH_MATCH) { … } } }
-query ($id: Int) { Media(id: $id, type: ANIME) { … description(asHtml: false) } }
-query ($id: Int) { Media(id: $id, type: ANIME) { characters(sort: ROLE, perPage: 25) {
-  edges { role node { id name { full native } image { large } } voiceActors(language: JAPANESE) { name { full } } } } } }
-query ($id: Int) { Media(id: $id, type: ANIME) { recommendations(sort: RATING_DESC, perPage: 20) {
-  nodes { mediaRecommendation { … } } } } }
-query ($id: Int) { Media(id: $id, type: ANIME) { relations { edges { relationType node { … } } } } }
-```
-
-Also `[code]` `lib/anime/anilist-extra.ts`: `Page.characters(sort: FAVOURITES_DESC, search:)` perPage 30;
-`Character(id:)` with `description(asHtml:false)`, `gender`, `age`, `favourites`,
-`media(sort: POPULARITY_DESC, perPage: 12)`; `Page.airingSchedules(notYetAired: true, sort: TIME)` perPage 40;
-`browseAnime` with `$genre/$year/$season/$format/$status/$sort` (perPage 30, **no page variable** — first page
-only); `GenreCollection`; and the two-field extras query
-`query ($id: Int) { Media(id: $id) { idMal coverImage { color } } }`.
-
-**`idMal` is the most important field in the application** — the only bridge to anything streamable, because
-megavid is keyed purely on MAL ids (section 3).
-
-```json
-// success [live]
-{"data":{"Media":{"id":813,"idMal":813,"title":{"english":"Dragon Ball Z","romaji":"Dragon Ball Z"},
-"episodes":291,"status":"FINISHED"}}}
-
-// unmapped id [live] — HTTP 200, not an HTTP error
-{"errors":[{"message":"Not Found.","status":404,"locations":[{"line":1,"column":2}]}],"data":{"Media":null}}
-```
-
-The second shape is the trap: HTTP 200 with an `errors` array and `Media: null`. `anilistFetch` throws on the
-`errors` key, so the app treats it as fatal `[code]` `[live]`.
-
-Normalisation `[code]` `lib/anime/anilist-map.ts`: title = `english → romaji → native → "Untitled"`; score =
-`Math.round(averageScore) / 10`; cover = `coverImage.large || .medium || ""`; `type` whitelisted against
-`TV|MOVIE|OVA|ONA|SPECIAL|MUSIC` else `null`; `studios` = `studios(isMain:true).nodes[].name`.
-
-*Repo bug worth fixing in a port:* `AnimeSchema` in `lib/anime/types.ts` omits `seasonYear` and
-`nextAiringEpisode`, yet `anilist-map.ts` passes both to `AnimeSchema.parse(...)`. Zod strips unknown keys, so
-both are silently dropped and downstream code reads them elsewhere `[code]`.
-
-### 2.2 Jikan REST — MAL episode lists (unreliable)
-
-| Item | Value |
-| --- | --- |
-| Endpoint | `GET https://api.jikan.moe/v4/anime/{malId}/episodes` `[code]` `lib/anime/jikan.ts` |
-| Headers | `Accept: application/json` |
-| Cache | `next: { revalidate: 3600 }` |
-| Failure contract | any non-`ok` response **or** thrown error → `[]`; never throws to the caller |
-| Mapping | `data[].mal_id → number` (fallback `index+1`), `data[].title → title`, `data[].filler → filler` |
-| Status | **`000`** — DNS resolves (`135.181.39.91`) but TCP connect never completes; three 15 s attempts all timed out `[live]` |
-
-Because Jikan is best-effort, the episode grid degrades to a **generated** list `[code]`
-`components/screens/EpisodeList.tsx`:
-
-```ts
-if (data?.length) return data;
-if (!totalEpisodes || totalEpisodes < 1) return [];
-const count = Math.min(totalEpisodes, 2000);
-return Array.from({ length: count }, (_, i) => ({ number: i + 1, title: count === 1 ? "Movie" : null, filler: false }));
-```
-
-The generated list is only as good as AniList's `episodes`, which is `null` for long-running shows (One Piece
-returns `episodes: null` `[live]`) — in that case the grid is empty and only the Aniwatch feed (2.4) helps.
-The `2000` cap is a deliberate guard. Jikan's documented ~3 req/s and 60/min quotas could not be measured
-because the host was unreachable `[unverified]`.
-
-### 2.3 Kitsu — secondary discovery
-
-`GET https://kitsu.io/api/edge/anime?filter[text]={q}&page[limit]=20` and `?sort=-userCount&page[limit]=20`,
-`Accept: application/vnd.api+json`, `revalidate: 3600`, returns `[]` on any failure `[code]`
-`lib/anime/kitsu.ts`. **Use `kitsu.io`, not `kitsu.app`:** `kitsu.io/api/edge/anime` → `200`, `kitsu.app` →
-`403` behind Cloudflare `[live]`. Fields come from JSON:API `attributes` (`titles.en || canonicalTitle`,
-`posterImage.original|large`, `coverImage.original`, `subtype`, `averageRating/10`, `startDate.slice(0,4)`).
-
-### 2.4 Aniwatch WordPress REST — real episode feed and slugs
-
-| Item | Value |
-| --- | --- |
-| Base | `https://aniwatchtv.by/wp-json/wp/v2` `[code]` `lib/anime/aniwatch-types.ts` (`BASE_URL`) |
-| Server headers | `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36`, `Referer: https://aniwatchtv.by` |
-| Browser path | rewritten to `/api/proxy/aniwatch?url=…&ref=…`, because a browser cannot set `User-Agent` `[code]` |
-| Cache | `revalidate: 300` server-side; proxy route returns `s-maxage=3600` |
-| Status | `200` `[live]` |
-
-| Purpose | Request |
-| --- | --- |
-| Latest episodes | `/posts?page={p}&per_page={n}&orderby=date&order=desc` |
-| Single episode | `/posts/{postId}` |
-| Series list | `/categories?page={p}&per_page=100&orderby=count&order=desc` |
-| Episodes of a series | `/posts?categories={categoryId}&per_page=100&orderby=date&order=desc` |
-| Episode search | `/posts?search={q}&per_page={n}` |
-| Series by name | `/categories?search={q}&per_page=10` |
-
-Only `id`, `date`, `slug`, `link`, `title.rendered`, `categories[]`, `tags[]` are kept (zod `WpPostRawSchema`);
-`content.rendered`, `excerpt` and `yoast_head` are discarded. Those blobs are large — fetch and drop, never
-store. Observed `[live]`:
-
-```json
-[{"id":48,"count":1218,"description":"","link":"https://aniwatchtv.by/case-closed/","name":"Case Closed",
-  "slug":"case-closed","taxonomy":"category","parent":0,"meta":[],"yoast_head":"<!-- … -->"}]
-```
-
-Posts headers `[live]`: `x-wp-total: 25114`, `cf-cache-status: DYNAMIC`, no rate-limit header. The documented
-UA+Referer requirement is the code's defensive choice `[code]`; during this check `/posts?per_page=1` also
-returned `200` with curl's default UA and no Referer `[live]` — treat the headers as *recommended*, keep
-sending them (Cloudflare bot rules are the risk).
-
-The REST payload has no episode field, so the number is parsed from slug then title, and audio from either
-`[code]`: `/-episode-(\d+)/i`, `/episode\s*(\d+)/i`, `/dub(bed)?/i`.
-
----
-
-## 3. Streaming resolution pipeline
-
-### 3.1 Flow
-
-```
-1. client  GET /api/anime/source?slug=&mal=&ep=&audio=sub|dub&provider=&refresh=1   [code] source/route.ts
-            └─ if mal && ep are supplied the slug is IGNORED          ← the reliable path
-2. server  resolveTargetFromSlug(slug)                                     [code] lib/anime/mega.ts
-            GET https://aniwatchtv.by/<slug>/  (UA + Referer)
-            regex <iframe[^>]*src="([^"]+)"  → playerUrl
-            regex megavid\.buzz/mal/(\d+)/(\d+)/(sub|dub) in the page
-            if absent → GET playerUrl, retry the same regex / a nested iframe
-3. server  for id of PROVIDER_ORDER:
-            GET https://megavid.buzz/mal/{mal}/{ep}/{audio}/source?axsv={id}
-            UA + Referer: https://megavid.buzz/ + Accept: application/json
-            AbortSignal 12 s, cache: no-store, redirect: follow
-4. server  gate: GET <source> with Range: bytes=0-512 — accept only if body starts "#EXTM3U"
-5. server  track filter: DNS-resolve the host of each of the first 12 tracks (1.5 s timeout)
-6. server  200 {status, source, tracks, providers, provider, malId, episode, audio, …}, Cache-Control: no-store
-7. client  src = /api/proxy/media?url=<source>&ref=https://megavid.buzz/&mode=smart
-```
-
-`slug → megavid` is the fragile half. Live check on a current post `[live]`: the iframe on
-`/magic-repo-man-…-episode-5-english-subbed/` is
-`https://aniwatchtv.by/wp-content/themes/animestream-child/player/?source=blogger&url=TDQ0…%3D%3D`, and that
-player page yields a Google Video MP4, not megavid:
-
-```js
-var fileUrl = "https://rr4---sn-vgqsknd7.googlevideo.com/videoplayback?expire=…&itag=18&source=blogger…";
-var sources = [{"file":"https://rr4---sn-vgqsknd7.googlevideo.com/videoplayback?…","label":"360p"}];
-```
-
-So the megavid regex cannot match and `resolveTargetFromSlug` throws "No player found on the episode page".
-This is why the UI always builds watch links with `?mal=&ep=` from `EpisodeList`, and why `mega.ts` itself says
-"Open it from the anime page instead" `[code]`. A port should treat **`mal` + `ep` as required**. Unknown slugs
-are worse than errors: `/dragon-ball-z-episode-1/` → `301 → https://aniwatchtv.by` (homepage, `200`, no iframe)
-`[live]`.
-
-### 3.2 The megavid source contract
-
-```
-GET https://megavid.buzz/mal/{malId}/{episode}/{sub|dub}/source?axsv={provider}
-```
-
-Success, DBZ MAL 813 ep 1, `axsv=loli` `[live]` (trimmed, real values):
+| Param | Default | Notes |
+| --- | --- | --- |
+| `kind` | `trending` | `trending \| airing \| movies \| search \| browse`; any other value behaves as `trending` `[code]` |
+| `q` | — | `search` only; trimmed, `< 2` chars returns `{items: []}` at 200 `[code]` |
+| `page` | 1 | `search` only, clamped `>= 1` |
+| `genre` `year` `format` `status` `sort` | — / `POPULARITY_DESC` | `browse` only; `sort` is any `MediaSort` |
+| `season` | — | **not accepted by the route** although `browseAnime()` supports it `[code]` |
 
 ```json
 {
-  "status": "ok",
-  "source": "https://cp.megavid.buzz/hls/7c14bd1c-a907-4491-9bbc-c42d49db1af0/playlist.m3u8",
-  "tracks": [
-    {"file":"https://megavid.buzz/sub/in9td8y9…/D5ZwsD-…/eng-5.vtt",
-     "label":"English","kind":"captions","default":true},
-    {"file":"https://megavid.buzz/sub/E9oSZrp…/D5ZwsD-…/thumbnails.vtt",
-     "label":"","kind":"captions","default":false}
-  ],
-  "mega": true, "animex": false, "providers": [], "chapters": [], "type": "hls"
+  "items": [{
+    "id": 195604, "title": "Black Clover Season 2",
+    "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx195604-tSZcfKbVqSEG.jpg",
+    "banner": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/195604-lQpCzTziSA17.jpg",
+    "type": "TV", "score": 8.7, "year": 2026
+  }],
+  "kind": "trending"
 }
 ```
 
-Failure, MAL 40866 (One Punch Man S3) `[live]`:
+`search` adds `q` and `page` to the envelope. `score` is `Math.round(averageScore)/10` (`87 → 8.7`), `null` when
+unscored; `type` is `null` outside the six-value enum; `banner` may be `null` `[code]`. Page sizes: AniList
+`perPage` 20 for trending/airing/movies/search and 30 for browse, which ignores `page` and always returns AniList
+page 1 `[code]`.
+
+Cache `public, s-maxage=300, stale-while-revalidate=900` `[code]` `[live]`; failure `502 {error, items: []}`.
+Live 200s: `trending`, `airing`, `movies`, `search&q=bleach`, `browse&genre=Action&year=2024` `[live]`.
+
+## 3. `GET /api/anime/[id]`
+
+AniList id (not MAL). Five queries in parallel; only `getAnimeDetails` is mandatory — the rest are wrapped in
+a `settle()` helper `[code]`.
+
+| Section | Query | Degraded value |
+| --- | --- | --- |
+| `anime` | `DETAILS` | failure → `502` |
+| `malId`, `accentColor` | `ANIME_EXTRAS` | `{ idMal: null, color: null }` |
+| `relations` | `RELATIONS` | `[]` |
+| `characters` | `CHARACTERS` | `[]` |
+| `recommendations` | `RECOMMENDATIONS` | `[]` |
 
 ```json
-{"status":"missing","code":404,
- "message":"We couldn't find this episode. It may not exist, isn't available yet, or has been removed.",
- "retryable":false}
+{ "anime": { "id": 21, "title": "ONE PIECE", "type": "TV", "score": 8.7, "year": 1999,
+    "cover": "https://…/bx21-ELSYx3yMPcKM.jpg", "banner": "https://…/banner/21-wf37VakJmZqs.jpg",
+    "bannerImage": "https://…/banner/21-wf37VakJmZqs.jpg", "status": "RELEASING", "episodes": null,
+    "description": "Gold Roger was known as the Pirate King, the strongest and most infamous being…",
+    "genres": ["Action", "Adventure", "Comedy", "Drama", "Fantasy"], "studios": ["Toei Animation"],
+    "seasonYear": 1999, "nextAiringEpisode": { "episode": 1181, "airingAt": 1793600000 } },
+  "malId": 21, "accentColor": "#e49335",
+  "relations": [{ "id": 466, "title": "One Piece: Defeat the Pirate Ganzack!", "type": "OVA", "score": 6.5,
+                  "year": 1998, "relationType": "SIDE_STORY", "episodes": 1, "status": "FINISHED" }],
+  "characters": [{ "id": 40, "name": "Luffy Monkey", "role": "MAIN", "voiceActor": "Mayumi Tanaka",
+                   "image": "https://…/b40-MNypXsxSRb1R.png" }],
+  "recommendations": [{ "id": 11061, "title": "Hunter x Hunter (2011)", "type": "TV", "score": 8.9, "year": 2011 }] }
 ```
 
-| Upstream field | Use in `mega.ts` `[code]` |
-| --- | --- |
-| `status` | cast to `"ok" \| "missing" \| "countdown" \| "error"` |
-| `source` | passthrough URL; must pass the `#EXTM3U` gate when `status === "ok"` |
-| `type` | `"mp4"` kept; anything else **including absent** → `"hls"` |
-| `tracks[]` | DNS-filtered, otherwise forwarded as-is |
-| `providers[]` | forwarded as `{id, tip, hard}` for the server picker |
-| `iframeUrl` | read only when `status === "countdown"`, forwarded as `countdownUrl` `[no live example]` |
-| `message` | forwarded verbatim |
-| `chapters[]` | **dropped** (intro/outro offsets unused) |
-| `mega`, `animex`, `code`, `retryable` | **dropped** |
+Verbatim from `/api/anime/21` `[live]` (40 relations, 25 characters, 20 recommendations — matching the AniList
+page sizes in §15). `relations` keep only `type === "ANIME"` with `relationType` in
+`PREQUEL, SEQUEL, PARENT, SIDE_STORY, ALTERNATIVE, SPIN_OFF` and `format !== "MUSIC"`, sorted oldest-first by
+`year` then `id`, so the switcher reads Season 1 → N `[code]`.
 
-Two defects to fix in a port `[code]` `[live]`: upstream sends `"srclang":"en"` lowercase while `MegaTrack`
-declares `srcLang?`, so the value is always `undefined`; and `mega.ts` casts the JSON instead of validating
-it with zod (unlike `aniwatch.ts`), so only `Array.isArray` protects the client.
+Cache `s-maxage=600`, swr 1800. Errors: `400 {"error":"Invalid anime id"}` for non-numeric or `<= 0`;
+`502 {"error":"<message>"}` `[code]` `[live]`.
 
-### 3.3 Provider order and what actually resolves
+## 4. `GET /api/anime/episodes`
 
-`PROVIDER_ORDER = ["loli", "zuna", "yuki", "nero"]` `[code]`. An explicit `?provider=` is tried first, then
-the rest. Rules: a throwing/non-2xx provider is skipped; `ok` with a `source` that fails the `#EXTM3U` gate
-is **skipped** (this is what demotes dead CDNs); `missing` **aborts the loop when `audio === "sub"`** because
-a missing sub means the episode does not exist; the last non-ok result is returned from a 15 s cache.
+`mal` is required; non-numeric or `<= 0` → `400 {"error":"Valid ?mal= is required"}` `[code]` `[live]`.
 
-Measured 2026-10-31 `[live]`:
+Upstreams `[code]`: AniList `Media(idMal:, type:)` → `id idMal format status episodes seasonYear
+nextAiringEpisode { episode } title { english romaji native }` (`AbortSignal.timeout(8000)`, `revalidate: 3600`);
+Jikan `/v4/anime/{malId}/episodes` (`AbortSignal.timeout(4000)`, `revalidate: 3600`).
 
-| `axsv` | Response | Source host | Resolves? |
+```
+announced  = Media.episodes ?? null
+total      = announced ?? (nextAiringEpisode.episode != null ? max(nextAiringEpisode.episode - 1, 1) : null)
+isMovie    = format === "MOVIE" || total === 1
+```
+
+Fallback ladder `[code]`:
+
+| # | Condition | Result | `source` |
 | --- | --- | --- | --- |
-| `loli` | `ok`, `type: "hls"` | `cp.megavid.buzz`, or `megavid.buzz/vid/…` for CR/single-file titles | **yes** |
-| `zuna` / `yuki` / `nero` | `ok`, `type: "hls"` | `s-90.megavid.se` | **no** |
-| `sora` | `ok`, `type: "hls"` | `s-90.megavid.se` | **no**, and it is **not in `PROVIDER_ORDER`** |
+| 1 | Jikan returned rows | real titles, `filler` preserved | `"jikan"` |
+| 2 | Jikan empty, no total, `status === "RELEASING"` | 500 placeholder episodes | `"generated"` |
+| 3 | Jikan empty, `total > 0` | `min(total, 2000)` placeholders; single-episode titles named `"Movie"` | `"generated"` |
+| 4 | otherwise | `[]`, still `"jikan"` | `"jikan"` |
 
-`s-90.megavid.se` → `Host … not found: 3(NXDOMAIN)` `[live]`. In practice **`loli` is the only working
-provider**; the four-way failover degrades to one attempt plus three 12 s timeouts. Upstream advertises
-`providers: [zuna, yuki, sora, loli, nero]` (each `{tip, hard:false}`) even when those hosts are dead — so
-`providers[]` is a hint, not a health check. `sora` could be added to the order safely but is pointless while
-its host stays dead.
+```json
+{ "malId": 21, "anilistId": 21, "title": "ONE PIECE", "format": "TV",
+  "totalEpisodes": 1180, "year": 1999, "isMovie": false,
+  "episodes": [{ "number": 1, "title": null, "filler": false }], "source": "generated" }
+```
 
-Latency matters: megavid answered in ~2.0 s (Death Note dub) and ~5.2 s (OPM S2 dub); two 8 s probes timed out
-before succeeding at 20 s. Budget 2–6 s per attempt.
+Live samples (Jikan was down, so all used the generated path) `[live]`: `?mal=21` → 1180/1180, `?mal=61323`
+(Blue Box S2) → 12/12, `?mal=32281` (Your Name) → 1 episode titled `"Movie"` with `isMovie: true`, `?mal=1535`
+(Death Note) → 37/37.
 
-CDN families `[live]`:
+A failed Jikan is negatively cached per MAL id for 5 minutes (`jikanCooldown`), so a stall costs one 4 s timeout
+per anime rather than one per request `[code]`. The declared union includes `"anilist"` but no path assigns it
+`[code]`. Cache `s-maxage=900`, swr 3600.
 
-| Family | Master | Variants | Segments | Notes |
-| --- | --- | --- | --- | --- |
-| A `cp.megavid.buzz` | `/hls/{uuid}/playlist.m3u8` | `/hls/{uuid}/{480p,720p}/video.m3u8` | `cdn.megavid.buzz/{uuid}/{q}/video{n}.ts` | `ACAO: *`; `type: "hls"`, `mega: true` |
-| B `megavid.buzz/vid/…` | `…/{token}/master.m3u8` (other providers: `master.txt`) | one `RESOLUTION=1920x1080` variant + `#EXT-X-I-FRAME-STREAM-INF` | `…/seg-{n}-f1-v1-a1.{jpg,html,js}` — **obfuscated extensions, real MPEG-TS** | `ACAO: https://megavid.buzz`; **`type` absent**, `mega: false`, `animex: true` |
+## 5. `GET /api/anime/latest`
 
-Family B also returns `chapters`, e.g. `[{"title":"Intro","start":0,"end":110},{"title":"Outro","start":1355,"end":1453}]`
-(observed for DBZ ep 1 on `axsv=zuna`) `[live]` — free skip-intro data currently discarded.
+aniwatch WordPress feed plus search over the same feed.
 
-### 3.4 Resolver caching and timeouts
+| Param | Default | Notes |
+| --- | --- | --- |
+| `q` | — | Present → series search over the same feed, bypassing `page` (see below) |
+| `page` | 1 | clamped `>= 1`; listing mode only |
+| `per_page` | 12 | clamped 1–30 `[code]` (the helper allows 100); also the cap on search results |
 
-| Thing | Value |
+```json
+{ "items": [{ "id": 35890, "date": "2026-10-31T02:16:00",
+  "slug": "magic-repo-man-…-episode-5-english-subbed",
+  "title": "Magic Repo Man: … Episode 5 English Subbed",
+  "link": "https://aniwatchtv.by/magic-repo-man-…-episode-5-english-subbed/",
+  "categoryIds": [2493], "tags": [] }],
+  "q": null, "page": 1 }
+```
+
+`title`/`link` keep HTML entities (`&#8217;`), so clients must decode `[code]` `[live]`. Cache `s-maxage=120`,
+swr 600 — the shortest TTL in the app. Failure `502 {error, items: []}`.
+
+Search mode is not a plain `posts?search=` call: that endpoint returns **0 rows** on this WordPress install
+`[live]`, so `searchPosts()` resolves the query to series categories (`categories?search=` with the term
+hyphenated), ranks them by exact-slug match then post count, pulls episodes from the best one or two categories
+and slices to `per_page` `[code]`. Series that are not category-matched therefore return `{items: []}` rather
+than a fuzzy hit.
+
+## 6. `GET /api/anime/source`
+
+Stream resolution. Returns the megavid contract verbatim (no envelope) and is the only `no-store` metadata route.
+
+| Param | Notes |
 | --- | --- |
-| `SOURCE_TTL` (ok) | 90 000 ms |
-| countdown TTL | 30 000 ms |
-| negative TTL (missing/error) | 15 000 ms |
-| `TARGET_TTL` (slug → target) | 600 000 ms |
-| per-request timeout | 12 000 ms |
-| track-host DNS timeout | 1 500 ms |
-| cache key | `` `${malId}:${episode}:${audio}:${provider ?? "auto"}` `` |
-| HTTP cache | `Cache-Control: no-store, max-age=0` |
-| client cache | TanStack Query `staleTime: 60_000`, `retry: 1`, `retryDelay: 600` `[code]` `WatchView.tsx` |
+| `mal`, `ep` | Preferred input; `ep > 0` |
+| `audio` | `sub` (default) or `dub`; anything else is treated as `sub` `[code]` |
+| `slug` | Used only when `mal`/`ep` are missing |
+| `provider` | Pins a provider first; the rest of `PROVIDER_ORDER` still follows as fallback |
+| `refresh` | `1` bypasses the 90 s in-process source cache |
 
-Both caches are in-process `Map`s: per-instance, lost on cold start, a latency optimisation only.
+Resolution when `mal`/`ep` are absent `[code]`:
 
----
+1. `resolveTargetFromSlug(slug)` — fetch `https://aniwatchtv.by/{slug}/`, take the first `<iframe src>`, regex
+   `megavid\.buzz/mal/(\d+)/(\d+)/(sub|dub)`; if the iframe is a player indirection, fetch that page and repeat.
+   Cached 10 min.
+2. On failure `resolveSlugToMal(slug)` — title derived from the slug itself (the code treats WP `posts?slug=` as
+   unreliable), then AniList search → `idMal` via `ANIME_EXTRAS`, with a season-aware best-match so "Season 3"
+   does not resolve to the season-1 entry; episode parsed from `-episode-N` / `-ep-N`. Cached 30 min, negatives
+   included.
+3. Neither → `404`.
 
-## 4. HLS handling in the media proxy
+Two fallbacks sit after resolution: `fetchMegaSource()` walks the provider list, and if megavid answers `missing`
+or `error` while a `slug` is known, the route calls `extractVideoUrl(slug)` (no longer dead code) and returns the aniwatch
+blogger/JW-Player mirror instead — `status: "ok"`, `type: "mp4"`, `provider: "aniwatch"`, `tracks: []` and the
+message `"Playing from the aniwatch mirror (single quality)."` `[code]` (the mirror itself was not reproduced
+`[live]`; see Appendix B).
 
-`app/api/proxy/media/route.ts` GET parameters: `url` (required, absolute http/https, else `400`), `ref`
-(`Referer` sent upstream, defaults to `{protocol}//{host}/` of `url`), `mode` (`smart` default / `full`).
-Upstream request: full Chrome UA (`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like
-Gecko) Chrome/131.0 Safari/537.36`), `Referer: ref`, `Accept: */*`, client `Range` if present, `no-store`,
-25 s timeout, redirects followed.
-
-### 4.1 Playlist detection
-
-```ts
-const looksPlaylist =
-  /mpegurl/i.test(upstreamType) || /\.m3u8/i.test(targetUrl.pathname) ||
-  /[?&][tv]\.m3u8/i.test(targetUrl.search) || /\.m3u8/i.test(upstream.url);
-// else: sniff the first 48 bytes for "#EXTM3U" before streaming the body
+```json
+{ "status": "ok",
+  "source": "https://cp.megavid.buzz/hls/1e810e75-bc54-4101-8038-e891e23ce7ff/playlist.m3u8",
+  "type": "hls",
+  "tracks": [{ "file": "https://megavid.buzz/sub/s5xTL2uGu…/3d69e3d8….vtt",
+               "label": "English", "kind": "captions", "default": true }],
+  "providers": [], "provider": "loli", "malId": 1535, "episode": 1, "audio": "sub" }
 ```
 
-The sniff is essential: some providers serve the master as **`master.txt`** and subtitles as **`asset.txt`**
-`[live]`. Because the sniff precedes the subtitle branch, `master.txt` is treated as a playlist and
-`asset.txt` as subtitles — correctly `[code]`.
+| `status` | HTTP | Meaning | Client |
+| --- | --- | --- | --- |
+| `ok` | 200 | `source` is a live playlist | play via `/api/proxy/media` |
+| `missing` | 200 | upstream says the episode is absent | "not found"; dub-missing → offer sub |
+| `countdown` | 200 | `countdownUrl` (`iframeUrl`) for an unaired episode | show countdown |
+| `error` | 400/404/502 | nothing playable, `message` explains | show error, retry |
 
-### 4.2 Rewrite rules
+`missing`/`countdown`/`error` are **HTTP 200 bodies**; only parameter and resolution failures use 4xx/5xx `[code]`.
 
-```ts
-const isMaster = /#EXT-X-STREAM-INF/i.test(text) || /#EXT-X-MEDIA:/i.test(text);
-// every URI="…" attribute inside any #EXT-X-* tag is rewritten in BOTH modes
-//   (covers #EXT-X-MEDIA, #EXT-X-I-FRAME-STREAM-INF)
-// plain URI lines: master → always proxied; media → proxied when mode === "full"
-//                                         or (working-tree change, see note) unless host allows direct
-```
-
-> **Snapshot warning.** At commit `ed64868` the media-playlist branch ends with `return absolute`, i.e.
-> `smart` leaves segment URLs **direct**. During the writing of this document the working tree gained an
-> in-progress change that inverts that default: `return hostAllowsDirect(absolute) ? absolute : proxied(…)`
-> with `const DIRECT_SEGMENT_HOSTS = ["echovideo.to"]`. Under that version segments are **proxied by default**
-> and only named hosts stay direct. Both behaviours are recorded here because the direction of this default is
-> the single biggest performance and reliability decision in the proxy — re-read the file before relying on
-> either. The measurements in 4.3 (and every other section) were taken against the committed behaviour.
-
-Real output replaying the shipped function over a live family-A master, `mode=smart`,
-`ref=https://megavid.buzz/` `[code]` `[live]`:
-
-```http
-#EXT-X-STREAM-INF:BANDWIDTH=1987912,AVERAGE-BANDWIDTH=925703,CODECS="avc1.64001f,mp4a.40.2",RESOLUTION=854x480,CLOSED-CAPTIONS=NONE
-https://app.example/api/proxy/media?url=https%3A%2F%2Fcp.megavid.buzz%2Fhls%2F7c14bd1c-…%2F480p%2Fvideo.m3u8&ref=https%3A%2F%2Fmegavid.buzz%2F&mode=smart
-#EXT-X-STREAM-INF:BANDWIDTH=3091635,AVERAGE-BANDWIDTH=1469033,CODECS="avc1.640020,mp4a.40.2",RESOLUTION=1280x720,CLOSED-CAPTIONS=NONE
-https://app.example/api/proxy/media?url=https%3A%2F%2Fcp.megavid.buzz%2Fhls%2F7c14bd1c-…%2F720p%2Fvideo.m3u8&ref=https%3A%2F%2Fmegavid.buzz%2F&mode=smart
-```
-
-The media playlist those lead to keeps segments direct in `smart` mode (`#EXTINF:4.000000,` then
-`https://cdn.megavid.buzz/7c14bd1c-…/480p/video0.ts`); with `mode=full` that line becomes
-`…/api/proxy/media?url=https%3A%2F%2Fcdn.megavid.buzz%2F…%2Fvideo0.ts&ref=…&mode=full`.
-
-### 4.3 Why playlists must be proxied — the measurements
-
-All rows measured 2026-10-31 `[live]`:
-
-| Request | Result |
+| Live request | Result `[live]` |
 | --- | --- |
-| `megavid.buzz/vid/…/master.m3u8` | `200`, `Content-Type: application/vnd.apple.mpegurl`, **`ACAO: https://megavid.buzz`** |
-| `megavid.buzz/vid/…/seg-1-f1-v1-a1.jpg`, no Referer | **`403`** |
-| same, `Referer: https://megavid.buzz/` | `200`, `video/mp2t`, body starts `47 40` (`G@`, MPEG-TS sync) |
-| same, `Referer: https://example.com/` | `403` |
-| `megavid.buzz/sub/…/eng-5.vtt`, `Referer: https://megavid.buzz/` | `200`, `text/vtt`, `ACAO: https://megavid.buzz` |
-| same subtitle, no Referer | **`403`** |
-| `cp.megavid.buzz/hls/{uuid}/playlist.m3u8` | `200`, `ACAO: *`, clean content type |
-| `cdn.megavid.buzz/…/480p/video0.ts` | `200`, **`Content-Type: text/vnd.trolltech.linguist;charset=utf-8`**, body is MPEG-TS, `ACAO: *` |
+| `?mal=1535&ep=1&audio=sub` | `ok`, `loli`, `type:"hls"`, `cp.megavid.buzz`, 2 tracks |
+| `?mal=1535&ep=1&audio=dub` | `ok`, `cp.megavid.buzz/hls/f82b8e26-…`, 1 track |
+| `?mal=21&ep=1180&audio=sub` | `ok`, `megavid.buzz/vid/…`, `type` absent upstream → synthesised `"hls"` |
+| `?mal=1535&ep=1&audio=sub&provider=zuna` | `ok`, fell back to `loli` (zuna's host is NXDOMAIN) |
+| `?mal=1535&ep=9999&audio=sub` | `missing` + message "We couldn't find this episode…" |
+| *no params* / `?mal=1535` without `ep` | `404 {"status":"error","message":"Could not work out which anime this episode belongs to. Open it from the anime page."}` |
 
-Therefore: playlists (both families) must be proxied; `megavid.buzz/sub/…` subtitles must be proxied
-(referer-gated); family-B segments must be proxied (referer-gated *and* CORS-pinned) hence `mode=full`;
-family-A segments can stay direct (`ACAO: *`), hence `mode=smart` suffices **under the committed rewrite rule**.
-Under the in-progress proxy-by-default rule described in 4.2, family-A segments are proxied too unless the host
-is in `DIRECT_SEGMENT_HOSTS` — correct but slower and more bandwidth through the function.
+Caching `[code]`: `sourceCache` keyed `mal:ep:audio:provider` holds 90 s on success, 30 s for `countdown` and 15 s
+for failures; `targetCache` holds slugs 10 min. `refresh=1` touches only `sourceCache`.
 
-The bogus `text/vnd.trolltech.linguist` type on family-A segments is real. hls.js does not care (it appends
-bytes), but a native player that picks a demuxer from `Content-Type` will fail. The proxy passes the type
-through unchanged `[code]` — a known sharp edge for the APK.
+## 7. `GET /api/characters` / `/api/characters/[id]`
 
-### 4.4 Smart vs full, and automatic escalation
+`/api/characters?page=&q=` → AniList `Page(page:, perPage: 30) { characters(sort: FAVOURITES_DESC, search:) }`:
 
-`WatchView` starts in `smart` and flips to `full` on the first fatal player error, then cycles the remaining
-`providers[]`, then hard-errors `[code]`:
-
-```ts
-const handleFatal = useCallback(() => {
-  if (!fullProxy) { setFullProxy(true); return; }
-  const available = (data?.providers ?? []).map((p) => p.id);
-  const currentIndex = data?.provider ? available.indexOf(data.provider) : -1;
-  const next = available.slice(currentIndex + 1).find((id) => id !== data?.provider);
-  if (next) { setProvider(next); setFullProxy(false); return; }
-  setHardError(true);
-}, [fullProxy, data]);
+```json
+{ "items": [{ "id": 17, "name": "Naruto Uzumaki",
+              "image": "https://s4.anilist.co/file/anilistcdn/character/large/b17-….png",
+              "favourites": 51234 }], "page": 1 }
 ```
 
-`VideoPlayer` gives escalation a chance to fire: on fatal `NETWORK_ERROR` it calls `hls.startLoad()` up to
-twice (800/1600 ms backoff); on fatal `MEDIA_ERROR` it calls `hls.recoverMediaError()` up to twice; then
-`onFatal` `[code]`. This is exactly right for family B: smart mode hands the browser segment URLs it cannot
-fetch, hls.js exhausts retries, `onFatal` flips `mode=full`, playback resumes.
+Cache `s-maxage=600`, swr 1800; failure `502 {error, items: []}` `[code]`.
 
-### 4.5 Range, status and returned headers
+`/api/characters/[id]` → `Character(id:)` with `description(asHtml:false)`, `gender`, `age`, `favourites` and up
+to 12 media nodes sorted `POPULARITY_DESC`:
 
-Client `Range` is forwarded; status is `206` when upstream is `206`, else `200`. `Content-Range` and
-`Accept-Ranges` are forwarded; `Content-Length` only when upstream is not content-encoded. Upstream Range
-support is inconsistent `[live]`: `Range: bytes=0-99` gave `206` with `content-range: bytes 0-99/186872`,
-`Range: bytes=0-1023` on the same asset gave `200` with no `Content-Range`; family-B segments ignored `Range`
-entirely. **Never require `206` for seeking.** Always returned: `Access-Control-Allow-Origin: *`,
+```json
+{ "character": {
+  "id": 40, "name": "Luffy Monkey", "native": "モンキー・D・ルフィ", "favourites": 35981,
+  "image": "https://s4.anilist.co/file/anilistcdn/character/large/b40-MNypXsxSRb1R.png",
+  "description": "__Height:__ 172 cm\n__Affiliations:__ ~!Straw Hat Pirates (Captain)…!~",
+  "gender": "Male", "age": "17-",
+  "media": [{ "id": 21, "title": "ONE PIECE", "type": "TV", "score": 8.7, "year": 1999 }] } }
+```
+
+The description keeps AniList markup — `__bold__`, `~!spoiler!~`, inline Markdown links `[live]`; sanitise it.
+Cache `s-maxage=3600`, swr 86400; `400 {"error":"Invalid character id"}`; `502` on upstream failure.
+
+## 8. `GET /api/schedule`
+
+No parameters. `Page(page: 1, perPage: 40) { airingSchedules(notYetAired: true, sort: TIME) }` — future airings
+only, earliest first; the route never passes a page, so pagination is not exposed over HTTP `[code]`.
+
+```json
+{ "items": [{ "id": 410607, "title": "Little Shark's Day Out Season 2",
+              "cover": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx204269-fTR4iyVjTHiC.png",
+              "episode": 30, "airingAt": 1793484000 }] }
+```
+
+`airingAt` is Unix **seconds**; `cover` is `""` (never null) when AniList has none; a null `episode` would fail
+the Zod schema and surface as `502` `[code]`. Cache `s-maxage=600`, swr 1800 (40 items returned) `[live]`.
+
+## 9. Manga endpoints
+
+All wrap MangaDex. Ids are UUIDs validated against `/^[a-f0-9-]{36}$/i` before any upstream call `[code]`.
+
+**`GET /api/manga/search`** — `q` (→ `title=`, forcing `order[relevance]=desc`), `page` (**0-based**,
+`offset = page * 24`), `order` (`latest` → `order[latestUploadedChapter]=desc`, else `order[followedCount]=desc`),
+`readable=1` → `hasAvailableChapters=true` `[code]`. Fixed: `limit=24`, `contentRating[]=safe`,
+`contentRating[]=suggestive`, `includes[]=cover_art`, **`availableTranslatedLanguage[]=en`**.
+
+```json
+{ "items": [{ "id": "c46455c3-86ec-420d-90f6-4c60a3c6cc93", "title": "Saitama Chainsaw Shoujo",
+  "description": "Kirisaki Fumio's just a highschool girl in love…", "status": "completed", "year": 2008,
+  "cover": "/api/manga/image?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F…%2F….jpg.512.jpg",
+  "contentRating": "safe", "latestChapter": "4",
+  "tags": ["Action", "Psychological", "Comedy", "Drama", "School Life"] }],
+  "page": 0, "limit": 24, "total": 11 }
+```
+
+`cover` is **already proxied** through `/api/manga/image`; `tags` cap at 8 English names `[code]`. Cache
+`s-maxage=300`, swr 900; `502` on failure. Live: `?q=chainsaw&readable=1` → 11 items, while `?order=readable`
+returns 24 items and a different `total` (49348 vs 49347) — `order=readable` is silently treated as `popular`, so
+the bundled verify script passes without testing the readable filter `[live]`.
+
+**`GET /api/manga/[id]`** — `/manga/{id}?includes[]=cover_art&includes[]=author&includes[]=artist`, then
+`/manga/{id}/feed?limit=500&translatedLanguage[]=en&order[chapter]=desc&includeFutureUpdates=0` `[code]`. Note the
+asymmetry: the **list** takes `availableTranslatedLanguage[]`, the **feed** takes `translatedLanguage[]` (§24.1).
+
+```json
+{ "id": "32d76d19-8a05-4db0-9fc2-e0b0648fe9d0", "title": "Na Honjaman Level-Up", "status": "completed",
+  "year": 2018, "latestChapter": "200", "contentRating": "safe", "tags": ["Action", "Adventure", "Fantasy"],
+  "description": "…", "cover": "/api/manga/image?url=…",
+  "authors": ["Lee Eun-Jae (이은재)"], "artists": ["Dubu (Redice Studio)"], "altTitles": ["Solo Leveling"],
+  "chapters": [{ "id": "f7d2cb75-83b2-426b-bdbd-032870c30abb", "chapter": "15", "volume": "1",
+    "title": "Dungeon Boss", "pages": 0, "group": null, "publishAt": "2023-09-05T17:14:12+00:00",
+    "externalUrl": "https://www.webnovel.com/comic/15227640605485101/45196977385821028" }] }
+```
+
+Post-processing `[code]`: duplicate chapter numbers collapse to one entry preferring the **hosted** copy
+(`pages > 0 && !externalUrl`); order is descending by parsed number, non-numeric last; a feed failure leaves
+`chapters: []` and still returns 200. `pages: 0` + `externalUrl` = a licensed chapter — link out, never render
+(§24.4). Cache `s-maxage=300`, swr 900; `400 {"error":"Invalid manga id"}`; `502` on failure.
+
+**`GET /api/manga/chapter/[id]`** — reader payload.
+
+```json
+{ "chapterId": "77fc6e02-a381-411d-ace6-4c00deacadb4", "mangaId": "a77742b1-…", "mangaTitle": "Chainsaw Man",
+  "chapter": "97", "volume": "11", "title": "Love, Love, Chainsaw.",
+  "pages": ["/api/manga/image?url=https%3A%2F%2Fcmdxd98sb0x3yprd.mangadex.network%2Fdata%2F554b6d5b….png"],
+  "saverPages": ["/api/manga/image?url=…%2Fdata-saver%2F…"],
+  "prev": { "id": "7259bb55-…", "chapter": "96" }, "next": { "id": "ce88a93f-…", "chapter": "230" } }
+```
+
+Four upstream calls `[code]`: `/chapter/{id}?includes[]=manga` (600) → `/manga/{mangaId}` (3600) →
+`/at-home/server/{chapterId}` (`no-store`) → `/manga/{mangaId}/feed` ascending (600) for prev/next restricted to
+hosted chapters. `prev`/`next` are `null` at the ends **and** when the feed fails; all page URLs are proxied
+absolute paths. Cache `no-store` by design, because `at-home` nodes rotate. Live: 23 pages and 23 `saverPages` for
+ch. 97, `prev` 96, `next` 230. Errors: `400 {"error":"Invalid chapter id"}`; `502` when pages are unavailable.
+
+**`GET /api/manga/image`** — image proxy and MangaDex host allowlist. One param, `url`, absolute http(s) on
+`uploads.mangadex.org`, `mangadex.org` or `mangadex.network` (exact host or subdomain) `[code]` `[live]`.
+
+Upstream request: `User-Agent: AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)`, `Accept: image/avif,
+image/webp, image/apng, image/*,*/*;q=0.8`, `Referer: https://mangadex.org/`, 15 s timeout, `no-store`. Accepted
+only if `ok`, `Content-Type` starts with `image/`, and `Content-Length != 0`. A failing `*.mangadex.network` URL
+is retried once as `https://uploads.mangadex.org{same path and query}` `[code]`.
+
+Response `[code]` `[live]`: `Content-Type` (default `image/jpeg`), `Cache-Control: public, max-age=86400,
+s-maxage=31536000, stale-while-revalidate=604800`, `Access-Control-Allow-Origin: *`,
+`X-Content-Type-Options: nosniff`, `Content-Disposition: inline`. Errors `400 {"error":"Missing image url"}` /
+`"Invalid image url"` / `"Host not allowed"`, `502 {"error":"Image unavailable"}`. A live page fetch returned
+`200 image/png`, 767 192 bytes, 822×1200.
+
+## 10. `GET`/`HEAD /api/proxy/media`
+
+The security boundary of the streaming path: it fetches with a `Referer` a browser cannot forge, rewrites HLS,
+and re-serves with permissive CORS.
+
+| Param | Default | Notes |
+| --- | --- | --- |
+| `url` | required | absolute http(s); missing/invalid → `400` |
+| `ref` | origin of `url` | sent upstream as `Referer`; the client always sends `https://megavid.buzz/` `[code]` |
+| `mode` | `smart` | `full` proxies every variant and segment; `smart` proxies playlist lines always and segments unless the host is in `DIRECT_SEGMENT_HOSTS` |
+
+Pipeline `[code]`: validate → fetch (Chrome 131 UA, `Referer: ref`, `Accept: */*`, `Range` forwarded,
+`redirect: "follow"`, `no-store`, 25 s) → non-OK upstream becomes `502` (`404` preserved) →
+
+1. **Playlist detection** — `Content-Type` matches `/mpegurl/i`, path ends `.m3u8`, query has `t.m3u8`/`v.m3u8`,
+   final URL ends `.m3u8`, **or** the first bytes are `#EXTM3U` (this catches the `/vid/` family, which can be
+   labelled `text/vnd.trolltech.linguist`).
+2. **Rewrite** — every `URI="…"` attribute and every non-comment line is absolutised against the post-redirect
+   URL and replaced with `/api/proxy/media?url=<abs>&ref=<ref>&mode=<mode>`. Masters always go through the
+   proxy; media playlists follow `mode`.
+3. **Subtitles** — a `.vtt/.srt/.ass/.ssa/.txt` URL is buffered and converted to WebVTT.
+4. **Everything else** streams through, preserving `Content-Range`, `Accept-Ranges` and `206`.
+
+| Body | Headers |
+| --- | --- |
+| Playlist | `Content-Type: application/vnd.apple.mpegurl`, `Cache-Control: public, s-maxage=4, stale-while-revalidate=10` |
+| Subtitle | `Content-Type: text/vtt; charset=utf-8`, `Cache-Control: public, max-age=3600, s-maxage=3600` |
+| Segment | upstream type, `Cache-Control: public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400` |
+
+All responses carry `Access-Control-Allow-Origin: *`,
 `Access-Control-Allow-Headers: Range, Content-Type`,
-`Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges`. `HEAD` is implemented with a
-10 s timeout and `Referer: https://megavid.buzz/`.
+`Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges` `[code]`.
 
-### 4.6 SRT → VTT
+Verified `[live]`: a `/vid/` master came back `200 application/vnd.apple.mpegurl` with every variant rewritten to
+`http://localhost:3100/api/proxy/media?url=…`; the first segment returned `200 video/mp2t` (3 047 480 bytes, sync
+byte `0x47`); `HEAD` returned the same type with `max-age=3600` but ignores `ref`, always sending
+`Referer: https://megavid.buzz/` `[code]`.
 
-Content-driven, only for URLs whose path ends `.vtt|.srt|.ass|.ssa|.txt` `[code]`:
+Client escalation `[code]`: `WatchView.tsx` builds that URL for both the stream and each subtitle `file`, and on a
+fatal player error flips to `mode=full` before advancing to the next provider.
 
-```ts
-let out = text.replace(/^\uFEFF/, "").trimStart();
-if (out.startsWith("WEBVTT")) return out;                      // pass through
-out = out.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");    // 00:00:01,000 → 00:00:01.000
-return `WEBVTT\n\n${out}`;
-```
+## 11. `/api/proxy/aniwatch` and `/api/proxy/quotes`
 
-Response: `text/vtt; charset=utf-8`, `max-age=3600, s-maxage=3600`. The comma→dot swap is the only SRT
-repair; `.ass`/`.ssa` get a `WEBVTT` header bolted on and will not render properly. Every live subtitle
-observed was already real `text/vtt`, so this branch is defensive and **unverified** against live traffic.
+**`/api/proxy/aniwatch`** — GET proxy for the browser-side aniwatch path (`lib/anime/aniwatch.ts` switches on
+`typeof window !== "undefined"`) `[code]`. Params `url` (required, `400 {"error":"Missing url parameter"}`) and
+`ref` (default `https://aniwatchtv.by/`); forwards `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36` — the
+**short** UA, deliberately: Google Video `videoplayback` returns `403` to the full Chrome UA string and `206` to this
+one (reproduced 4/4) `[live]`, while megavid accepts either on `/vid/` masters and `/sub/` subtitles `[live]`; the
+handler also accepts `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+AppleWebKit/537.36`, returns JSON when the upstream type contains `application/json` and otherwise passes body and
+type through. Headers: `Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=3600, s-maxage=3600,
+stale-while-revalidate=86400` `[code]` `[live]`; `502` on throw. There is **no host allowlist**.
 
-### 4.7 Cache TTLs
-
-| Response | `Cache-Control` |
-| --- | --- |
-| Playlists | `public, s-maxage=4, stale-while-revalidate=10` |
-| Subtitles | `public, max-age=3600, s-maxage=3600` |
-| Binary (segments, MP4) | `public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400` |
-| `HEAD` | `public, max-age=3600` |
-| Errors | none (JSON `{error}` + CORS) |
-
-The 4 s playlist TTL is deliberate: playlists are rewritten per request and embed `ref`/`mode`, which change
-with failover state. Note `vercel.json` caps this route at `maxDuration: 30` while the file declares `60` —
-the platform wins in production, so long segment feeds can be truncated there but not locally `[code]`.
-
----
-
-## 5. Subtitle tracks
-
-Tracks arrive as `{file, label, kind, default}` and sometimes `srclang`. `kind` is always `"captions"` in
-every sample, even for subtitles; the app ignores it and forces `kind="subtitles"` on the `<track>` `[code]`.
+**`/api/proxy/quotes`** — `https://animechan.io/api/v1/random`, 4 s timeout, mapped from `data.anime.name`,
+`data.character.name`, `data.content`; on any failure a random entry from a hard-coded set of 10 quotes is
+returned with the same shape `[code]`.
 
 ```json
-[{"file":"https://megavid.buzz/sub/…/eng-2.vtt","label":"English","kind":"captions","default":true},
- {"file":"https://megavid.buzz/sub/…/nob-9.vtt","label":"Norwegian (Bokmål)","kind":"captions","default":false},
- {"file":"https://megavid.buzz/sub/…/thumbnails.vtt","label":"","kind":"captions","default":false}]
+{ "anime": "One Piece", "character": "Monkey D. Luffy", "quote": "I don't want to conquer anything…" }
 ```
 
-```json
-{"file":"https://cp.megavid.buzz/hls/f82b8e26-…/captions/en.vtt","label":"English","kind":"captions","srclang":"en"}
-```
+`Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=3600` on success, `max-age=60` on fallback.
+Live: animechan returns **404** on `/api/v1/random`, `/api/v1/quotes` and `/api/v1/quotes/random`, so the route
+currently always serves a fallback (still `200`) `[live]`.
 
-| Scheme | File pattern | Language encoding | Host |
-| --- | --- | --- | --- |
-| Per-language assets | `{eng,ara,fre,ger,spa,por,ita,rus,tur,pol,swe,dan,dut,nob,fin,heb,ind,tha,chi,bul}-{n}.vtt` | ISO 639-2 code in filename, English name in `label` | `megavid.buzz/sub/…` |
-| CR/named single file | `captions/en.vtt`, `track_0_CR_English_eng.vtt` | two-letter code in path, `srclang` present | `cp.megavid.buzz/hls/{uuid}/captions/` |
+## 12. `POST /api/ai`
 
-`default: true` is not a reliable selection signal: the player renders every track with `default={false}` and
-drives selection via `video.textTracks[i].mode` `[code]`. An empty `label` marks **thumbnail-sprite tracks**
-(`thumbnails.vtt`), which appear in the picker as `Track 2` because of `track.label || "Track N"` `[code]`. A
-port should filter `/thumbnails/i.test(file) || label === ""`.
+Spoiler-aware companion: Gemini 2.5 Flash behind a same-origin gate and a rotating key pool.
 
-Filtering actually implemented `[code]`:
-
-```ts
-const checks = await Promise.all(
-  tracks.slice(0, 12).map(async (track) =>                    // ← only the first 12 considered
-    (await resolveHost(new URL(track.file).hostname)) ? track : null),  // 1.5 s DNS timeout
-);
-return checks.filter((t): t is MegaTrack => t !== null);
-```
-
-Consequences, all verified `[code]` `[live]`: host DNS is the **only** filter; tracks on `s-90.megavid.se` are
-dropped while `megavid.buzz` / `cp.megavid.buzz` survive; and the 12-track cap silently truncates — One Punch
-Man S1 ep 1 advertises 19 tracks (18 languages + thumbnails) and only Arabic→Norwegian Bokmål reach the
-client, so Polish onwards is lost. DBZ ep 1 has 2 tracks, so its `thumbnails.vtt` survives the cap and shows
-up in the UI. The cap does bound DNS lookups at 12 per request.
-
-The dead `s-90.megavid.se` (NXDOMAIN `[live]`) was the CDN behind `zuna`, `yuki`, `nero` and `sora`. It makes
-three of four providers unplayable (the `#EXTM3U` gate rejects their `source`), empties their track lists via
-the DNS filter even though they report `status: "ok"`, and can leave a stale 90 s cached `ok` entry pointing
-at a dead host — which is what the smart→full→next-provider escalation exists to recover from. If the host
-returns, nothing needs changing except adding `sora` to the order.
-
----
-
-## 6. Manga (MangaDex)
-
-Base `https://api.mangadex.org`; covers `https://uploads.mangadex.org` `[code]` `lib/manga/mangadex.ts`. Every
-server call sends a descriptive UA as MangaDex's policy requires:
-
-```
-User-Agent: AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)
-Accept: application/json
-```
-
-`GET /manga?limit=1` → `200`, `cache-control: max-age=15, public, s-maxage=2592000, stale-while-revalidate=15`;
-no `x-ratelimit` header exposed `[live]`.
-
-| Purpose | Request | Revalidate |
+| Field | Type | Notes |
 | --- | --- | --- |
-| Search / browse | `/manga?limit=24&offset={page*24}&contentRating[]=safe&contentRating[]=suggestive&includes[]=cover_art[&title={q}&order[relevance]=desc \| &order[latestUploadedChapter]=desc \| &order[followedCount]=desc]` | 300 s |
-| Detail | `/manga/{id}?includes[]=cover_art&includes[]=author&includes[]=artist` | 300 s |
-| Chapter feed | `/manga/{id}/feed?limit=500&translatedLanguage[]=en&order[chapter]=desc&includeFutureUpdates=0` | 300 s |
-| Chapter meta | `/chapter/{id}?includes[]=manga` | 600 s |
-| Manga for reader | `/manga/{mangaId}?includes[]=cover_art` | 3600 s |
-| Page manifest | `/at-home/server/{chapterId}` | **`no-store`** |
-| Reader nav feed | `/manga/{mangaId}/feed?limit=500&translatedLanguage[]=en&order[chapter]=asc` | 600 s |
-
-Pages are `{baseUrl}/data/{hash}/{file}` (HD) and `{baseUrl}/data-saver/{hash}/{file}` (Lite) `[code]`.
-Observed manifest `[live]`:
+| `task` | enum | `summary \| catchup \| chat \| character \| charfacts \| charquiz \| recommend` |
+| `animeTitle` / `ceiling` | string 1–200 / int 0–100000 | title for the system prompt; last watched episode, `0` = no spoilers at all |
+| `question` / `characterName` / `context` | string ≤1000 / ≤200 / ≤5000 | `chat` / character tasks / reference text |
 
 ```json
-{"result":"ok","baseUrl":"https://cmdxd98sb0x3yprd.mangadex.network",
- "chapter":{"hash":"a890522a02d8da8b59d9ca40ddc4f32c",
-   "data":["1-8d9bdd8d…f013f5.png","2-f7e78ab4…0231c.png"],
-   "dataSaver":["1-cae9447…25250.jpg","2-8b4dbfe1…2966.jpg"]}}
+{ "text": "Ready for a thrilling ride?\n\nWhat if you could judge the world with a single notebook? …" }
 ```
 
-`baseUrl` is a rotating node host — never cache it. `data` and `dataSaver` use **different extensions and
-different content hashes** for the same page; do not derive one from the other.
+`[code]`: the `Origin` (else `Referer`) host must equal the request host, else `403 {"error":"forbidden"}` — a
+request with neither header is allowed, which is why `curl` succeeds. Invalid body → `400 {"error":"invalid body"}`,
+upstream failure → `500 {"error":"ai failed"}`. Upstream
+`generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` at `temperature 0.7`,
+`maxOutputTokens 800`; key pool `GEMINI_API_KEYS` (comma-separated) else `GEMINI_API_KEY`, round-robin via a module
+cursor with each key tried once, and no keys → `500`. Live: `200` with generated text; `Origin: https://evil.example`
+→ `403 {"error":"forbidden"}` `[live]`.
 
-### 6.1 Gotchas, verified
+## 13. `lib/client/api.ts`
 
-**a. `includeEmptyPages=0` / `includeExternalUrl=0` are traps.** Measured on *Na Honjaman Level-Up*
-(Solo Leveling, `32d76d19-8a05-4db0-9fc2-e0b0648fe9d0`) `[live]`:
+Every UI read goes through these helpers, which unwrap the envelope and throw `Error(json.error)` on non-OK `[code]`:
 
-| Feed request | Chapters |
-| --- | --- |
-| default (as the app sends it) | 24 — all `pages: 0` with `externalUrl: https://www.webnovel.com/…` |
-| `&includeExternalUrl=0` | **0** |
-| `&includeEmptyPages=0` | **0** |
-
-Filtering at the API level leaves nothing to show and no explanation, so the app requests the full feed and
-classifies client-side `[code]`: hosted = `pages > 0 && !externalUrl`, official = `!!externalUrl`.
-
-**b. `/at-home/server/{id}` succeeds for external-only chapters** — `200` with an empty manifest, not an
-error `[live]`:
-
-```json
-{"result":"ok","baseUrl":"https://cmdxd98sb0x3yprd.mangadex.network","chapter":{"hash":"","data":[],"dataSaver":[]}}
-```
-
-A reader must treat `pages.length === 0` as "not readable here", not as a network failure — this repo shows
-"No pages available", and the nav list filters `pages > 0` `[code]`.
-
-**c. `hasAvailableChapters` is only a query filter.** `&hasAvailableChapters=true` is accepted and shrinks the
-result set substantially — `total` fell from 86 128 (default safe+suggestive browse) to 46 470 when the flag
-was added `[live]` (the two requests differed only in that flag and in `includes[]=cover_art`) — but the
-attribute was **absent** from every manga object, even with the filter applied `[live]`. It therefore cannot be
-used as a per-item readability flag.
-
-**d. Duplicate chapter numbers.** Multiple scanlation groups release the same number; the app collapses on
-`chapter.chapter ?? chapter.id` preferring the hosted copy `[code]`:
-`const hosted = chapter.pages > 0 && !chapter.externalUrl; if (!existing || (hosted && !existingHosted)) seen.set(key, chapter);`
-
-**e. Numeric sort needs `NaN` handling.** Chapter numbers are strings; the app uses `parseFloat` and pushes
-`NaN` last in both directions. Skipping this misplaces extras and `.5` chapters `[code]`.
-
-**f. Language filter is English-only** (`translatedLanguage[]=en`) — titles without an English scanlation show
-an empty chapter list even though the manga exists.
-
-### 6.2 Image proxy — `app/api/manga/image/route.ts`
-
-| Item | Value |
-| --- | --- |
-| Query | `?url=<absolute url>`; http/https only else `400` |
-| Host allowlist | `uploads.mangadex.org`, `mangadex.org`, `mangadex.network` **and their subdomains** (`=== host \|\| endsWith("." + host)`) — anything else `400 {"error":"Host not allowed"}` |
-| Upstream headers | same UA, `Accept: image/avif,image/webp,image/apng,image/*,*/*;q=0.8`, `Referer: https://mangadex.org/` |
-| Validation | `res.ok`, `content-type` starts with `image/`, `content-length` non-zero |
-| Timeout | 15 000 ms |
-| Fallback | if host ends in `mangadex.network`, retry the **same path** on `https://uploads.mangadex.org` |
-| Response | mirrored `Content-Type`, `Cache-Control: public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800`, `ACAO: *`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline` |
-| Failure | `502 {"error":"Image unavailable"}`, `Cache-Control: no-store` |
-
-Fallback verified in both directions `[live]`:
-
-```
-GET https://cmdxd98sb0x3yprd.mangadex.network/data/a890522a…/1-8d9bdd8d….png → 200 image/png 3 785 040 bytes
-GET https://uploads.mangadex.org/data/a890522a…/1-8d9bdd8d….png              → 200 image/png 3 785 040 bytes
-```
-
-The at-home node host is not `uploads.mangadex.org`, so the allowlist must include `*.mangadex.network`; an
-`uploads`-only allowlist breaks the reader entirely.
-
----
-
-## 7. Endpoint status matrix
-
-All statuses measured **2026-10-31 (UTC)**. `000` = no HTTP response (connect/TLS failure), not a status code.
-
-| Endpoint / host | Status | Notes | Reliable? |
-| --- | --- | --- | --- |
-| `POST https://graphql.anilist.co` | `200` | GraphQL only (`GET` → `404`); `x-ratelimit-limit: 30` | **Yes** |
-| `https://api.jikan.moe/v4/anime/{id}/episodes` | **`000`** | DNS ok, TCP connect never completes; 3×15 s | **No** — keep optional |
-| `https://kitsu.io/api/edge/anime` | `200` | JSON:API, needs `Accept: application/vnd.api+json` | Yes |
-| `https://kitsu.app` | **`403`** | Cloudflare; not the API host | No |
-| `https://aniwatchtv.by` | `200` | WordPress 7.0 + AnimeStream child theme | Yes |
-| `GET /wp-json/wp/v2/posts` | `200` | `x-wp-total: 25114`; UA/Referer recommended | Yes |
-| `GET /wp-json/wp/v2/categories` | `200` | payload carries large `yoast_head` blobs | Yes |
-| `GET /{episode-slug}/` | `200` / `301` | `301 → homepage` for unknown slugs | Fragile |
-| `megavid.buzz/mal/{mal}/{ep}/sub/source?axsv=loli` | `200` | `{status, source, tracks, providers, type}`; 2–6 s | **Yes** |
-| same, `axsv=zuna\|yuki\|nero\|sora` | `200` | returns a dead-host source | **No** |
-| `s-90.megavid.se` | **NXDOMAIN** | dead CDN behind 3 of 4 providers | **Dead** |
-| `cp.megavid.buzz/hls/{uuid}/playlist.m3u8` | `200` | `ACAO: *`, clean content type | Yes |
-| `cdn.megavid.buzz/…/video{n}.ts` | `200`/`206` | TS body but `text/vnd.trolltech.linguist` | Yes (wrong type) |
-| `megavid.buzz/vid/…/master.m3u8` | `200` | `ACAO: https://megavid.buzz` — must proxy | Yes |
-| `megavid.buzz/vid/…/seg-*.jpg` | `403` bare / `200` with Referer | body is MPEG-TS | Only via proxy |
-| `megavid.buzz/sub/…/eng-*.vtt` | `403` bare / `200` with Referer | hotlink-gated | Only via proxy |
-| `GET https://api.mangadex.org/manga` | `200` | 86 128 titles (safe+suggestive) | Yes |
-| `GET /at-home/server/{id}` | `200` | empty manifest for external-only chapters | Yes |
-| `https://uploads.mangadex.org` | `200` | covers + page data; fallback for node hosts | Yes |
-| `api.consumet.org/anime/gogoanime/top-airing` | **`301`** | `→ github.com/consumet/api.consumet.org` README; retired | **Dead** |
-| `api.anify.tv/search/anime/…` | **`301`** | `→ https://api.anify.tv/` (self-redirect loop) | **Dead** |
-| `api.allanime.day/api` | **`403`** | WAF block | **Dead** |
-| `https://allanime.day` | `301` | `→ https://allanime.day//` | No |
-| `https://animepahe.ru` | `301` | `→ https://animepahe.su/` | Moved |
-| `https://animepahe.com` | `301` | `→ https://animepahe.pw/` | Moved |
-| `https://anitaku.pe` | `200` | plain Apache, no Cloudflare | Yes, for scraping |
-| `https://animesuge.cz` | `200` | the source captured in `some-apis.txt` | Yes |
-| `https://animechan.io/api/v1/random` | **`404`** | quotes route always serves its static fallback | Degraded |
-
-The brief listed AllAnime `403` and AnimePahe `403`; measured values are AllAnime `403`
-(`api.allanime.day/api`) and AnimePahe **`301`** to `animepahe.su`/`animepahe.pw`. Both are unusable without
-re-scraping, but the codes differ.
-
-`some-apis.txt` at the repo root is a HAR-style capture of `animesuge.cz` AJAX calls (`x-requested-with:
-XMLHttpRequest`, `credentials: include`, matching `referrer`). It documents a fourth possible source this app
-does not use; responses wrap JSON in an HTML string (`result.html`), so it needs an HTML parser and is not a
-drop-in replacement `[code]`.
-
----
-
-## 8. Known-broken and degraded cases
-
-| Case | Symptom | Cause | Handling |
-| --- | --- | --- | --- |
-| One Punch Man S3, MAL `40866` | `{"status":"missing","code":404,"retryable":false}` | megavid has no such episode | "Episode not found at the source" + Retry `[code]` `[live]` |
-| OPM S3 in AniList | `errors: [Not Found]`, `Media: null` | no AniList entry maps to MAL 40866 (`Media(idMal:40866)` → 404) | `anilistFetch` throws; no `idMal`, so watch links carry no `?mal=` `[code]` `[live]` |
-| Unknown episode slug | `301 → homepage`, then "No player found on the episode page" | site redirects unknown slugs | 502 JSON with that message `[code]` `[live]` |
-| Current-week episodes | slug resolution fails outright | iframe is the `player/?source=blogger` indirection → `googlevideo.com` MP4, not megavid | only `?mal=&ep=` works; UI always supplies them `[code]` `[live]` |
-| Jikan down | no episode titles, no filler flags | host unreachable (`000`) | generated `1..min(episodes,2000)` list `[code]` `[live]` |
-| Long-running shows | empty grid when Jikan is down | AniList `episodes: null` (One Piece, Conan) | Aniwatch category feed only `[code]` `[live]` |
-| Licensed manga (Solo Leveling) | chapter list full, reader empty | all English entries are `pages: 0` + `externalUrl`; at-home returns `200` with empty `data[]` | "English pages live on the official site" + "Read officially" link `[code]` `[live]` |
-| No English scanlation | empty chapter list | hard-coded `translatedLanguage[]=en` | none — out of scope `[code]` |
-| `zuna`/`yuki`/`nero`/`sora` | `ok` but unplayable | `s-90.megavid.se` NXDOMAIN | `#EXTM3U` gate + DNS track filter → silent skip `[code]` `[live]` |
-| Dub missing for sub-only title | `missing` while `audio=dub` | upstream has no dub | "Dub isn't out for this one yet" + SUB button `[code]` |
-| Subtitle 403 | tracks listed but never render | `Referer`/`Origin` hotlink gate on `megavid.buzz/sub/…` | `WatchView` always proxies track URLs `[code]` `[live]` |
-| `thumbnails.vtt` in menu | blank-label "Track 2" that does nothing | label `""`, `kind: "captions"` | unfiltered; the 12-track cap sometimes hides it `[code]` `[live]` |
-| `countdown` status | code supports `{status:"countdown", iframeUrl}` → `countdownUrl` | — | **no live example**; future episodes returned `missing`/404 instead `[live]` |
-| AnimeChan quotes | always the static 10-quote fallback | upstream `404` | by design `[code]` `[live]` |
-| `maxDuration` mismatch | media proxy capped at 30 s in production, 60 s locally | two values committed | `[code]` |
-
----
-
-## 9. Failover and resilience playbook
-
-```
-resolveStream(malId, episode, audio):
-  1. cache hit (90 s positive / 15 s negative)                  → reuse
-  2. explicit provider? try it first, then PROVIDER_ORDER minus it
-  3. for id of [loli, zuna, yuki, nero]:        # add "sora" only if its host returns
-       GET /mal/{id}/{ep}/{audio}/source?axsv={id}     timeout 12 s
-       !raw                                            → next provider
-       status == "countdown"                           → return + countdownUrl (30 s cache)
-       status == "missing" && audio == "sub"           → STOP (episode does not exist)
-       status == "ok" and source passes #EXTM3U gate   → accept (90 s cache)
-       otherwise                                       → remember as `last`, next provider
-  4. return `last` (15 s cache) | throw "Every stream provider is unavailable right now."
-
-playback:
-  src = proxy(source, ref=https://megavid.buzz/, mode=smart)
-  fatal → mode=full (same provider) → next provider (mode=smart) → hard error + Retry (refresh=1)
-```
-
-* **Always send `?mal=&ep=`.** The slug path costs an extra round trip, fails on current-week posts and can
-  silently land on the homepage.
-* **Expect 2–6 s** per resolve, up to 4 × 12 s if `loli` is down. Show a real loading state.
-* **Never cache `source` or `baseUrl` longer than 90 s** — both embed per-session tokens.
-* **Cache metadata hard**: AniList 5 min, MangaDex 5–60 min, aniwatch 5 min. Those are the rate-limited surfaces.
-* **Treat "usable body", not "200", as success** — Jikan `000`, at-home `200` with empty pages, megavid `ok`
-  with a dead host and AniList `200` with `errors` all defeat naive status-code checks.
-* Negative caching is short by design (15 s) so a blip does not pin an episode to "missing".
-* Timeout budget: 12 s megavid/aniwatch, 25 s media proxy, 15 s manga image, 10 s `HEAD`, 4 s quotes.
-
----
-
-## 10. Reuse notes for a mobile APK client
-
-### 10.1 What must stay server-side
-
-| Call | Why not client-side |
-| --- | --- |
-| `aniwatchtv.by/wp-json/…` | needs a browser `User-Agent` + `Referer`, forbidden in a browser context |
-| `aniwatchtv.by/<slug>/` | same, and it is ~200 KB of markup |
-| `megavid.buzz/mal/…/source` | needs `Referer: https://megavid.buzz/`; the response is the whole stream inventory — keep it behind your auth/rate limiting |
-| `megavid.buzz/vid/…` playlists and segments | CORS pinned + referer-gated (`403` otherwise) `[live]` |
-| `megavid.buzz/sub/…` subtitles | referer-gated `[live]` |
-| `api.mangadex.org` | works client-side, but expects a descriptive UA and polite rates; a shared proxy UA is better |
-| `uploads.mangadex.org` + node hosts | node hostname rotates; the `uploads` fallback matters `[live]` |
-
-A native client can fetch family-A segments (`cdn.megavid.buzz`, `ACAO: *`) and cover images itself to save
-proxy bandwidth.
-
-### 10.2 Minimum server surface
-
-```
-GET /source?mal&ep&audio=sub|dub&provider?     → MegaSource JSON (shape in 3.2)
-GET /media?url&ref&mode=smart|full              → playlist rewrite + passthrough + SRT→VTT + Range
-GET /manga/search?q&page&order=popular|latest   → {items, page, limit, total}
-GET /manga/{id}                                 → MangaDetail
-GET /manga/chapter/{id}                         → MangaReaderData (pages, saverPages, prev, next)
-GET /manga/image?url                            → host-allowlisted image bytes
-```
-
-Keep these envelopes identical to the ones documented here so both clients share one backend.
-
-### 10.3 Headers, CORS and gating
-
-* Upstream UA: the full Chrome string is what the code sends; a bare
-  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36` sufficed for aniwatch `[live]`.
-* Upstream `Referer`: **never omit it for `megavid.buzz`** — `403` without it `[live]`.
-* Default `ref` to the target's own origin when the client omits it; `WatchView` hard-codes
-  `https://megavid.buzz/` for playlists, segments and subtitles, which works for every host observed.
-* Return `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Headers: Range, Content-Type`,
-  `Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges`; without the expose header a
-  browser player cannot read `Content-Range`.
-* The media proxy is an **open proxy by design** here (`url` is any http(s) URL). For a public APK, allowlist
-  at least `cp.megavid.buzz`, `cdn.megavid.buzz`, `megavid.buzz`, `*.megavid.se`, `*.mangadex.network`,
-  `uploads.mangadex.org`, or it will be abused.
-
-### 10.4 Native player notes
-
-* Media3/ExoPlayer: expect `master.m3u8`, `master.txt`, and single-variant masters.
-* **Do not trust `Content-Type`** — family-A segments are MPEG-TS bytes served as
-  `text/vnd.trolltech.linguist;charset=utf-8` `[live]`. Force the TS extractor or correct the type in your proxy.
-* Family-B segment extensions are `.jpg`/`.html`/`.js` while the bytes are MPEG-TS `[live]`; never infer the
-  container from the extension.
-* Some masters use `#EXT-X-I-FRAME-STREAM-INF` with `URI="…"` — rewrite `URI="…"` attributes as well as plain
-  lines, or scrubbing thumbnails will hit the origin and fail.
-* Range support is inconsistent; do not require `206` for seeking. TS VOD seeks fine from a plain `200`.
-* Subtitles are side-loaded `text/vtt`: build `MediaItem.SubtitleConfiguration` with `MimeTypes.TEXT_VTT` and
-  load through your proxy. Filter `thumbnails.vtt`.
-* Retry policy that mirrors this app: 2 network retries with backoff, 2 media-error recoveries, then escalate
-  proxy mode, then escalate provider.
-
-### 10.5 Rate limits and caching
-
-| Upstream | Budget | Strategy |
+| Function | HTTP call | Returns |
 | --- | --- | --- |
-| AniList | 30 req/min observed `[live]` (90 documented) | 5–10 min cache; batch with GraphQL aliases (this repo fires 8–10 separate queries per detail page — wasteful) |
-| Jikan | unreachable; ~3 req/s, 60/min documented `[unverified]` | never block UI on it |
-| MangaDex | ~5 req/s for `/at-home`, ~10 req/s general, documented `[unverified]` | 300–3600 s server cache; `/at-home` `no-store` but cached per chapter client-side |
-| aniwatch WP | no headers exposed `[live]` | 5 min cache; `per_page=100` max |
-| megavid | no headers exposed | 90 s positive / 15 s negative; ≤1 in-flight resolve per `(mal, ep, audio)` |
+| `fetchDiscover(kind)` | `GET /api/anime/discover?kind=` | `AnimeSummary[]` |
+| `fetchSearch(q)` | `GET /api/anime/discover?kind=search&q=` | `AnimeSummary[]` |
+| `fetchBrowse(f)` | `GET /api/anime/discover?kind=browse&genre&year&format&status&sort` | `AnimeSummary[]` |
+| `fetchAnimeDetail(id)` | `GET /api/anime/{id}` | `AnimeDetailPayload` |
+| `fetchWatchEpisodes(malId)` | `GET /api/anime/episodes?mal=` | `WatchEpisodesResponse` |
+| `fetchCharacters(page, q)` | `GET /api/characters?page=&q=` | `CharacterCard[]` |
+| `fetchCharacterFull(id)` | `GET /api/characters/{id}` | `CharacterFull` |
+| `fetchSchedule()` | `GET /api/schedule` | `ScheduleEntry[]` |
+| `fetchLatestEpisodes(page, perPage)` | `GET /api/anime/latest?page=&per_page=` | `AniwatchEpisode[]` |
+| `fetchEpisodeSearch(q)` | `GET /api/anime/latest?q=` | `AniwatchEpisode[]` |
 
-### 10.6 Re-verify before shipping
+Two call sites bypass it `[code]`: `WatchView.tsx` → `GET /api/anime/source?slug&mal&ep&audio&provider&refresh`
+(`no-store`, `retry: 1`) and `lib/ai/useAi.ts` → `POST /api/ai`; manga screens and the media proxy use raw
+`fetch`/`<img>`/hls.js — a gap worth closing if `api.ts` is to be the single mobile contract.
 
-1. Which `axsv` providers resolve (today only `loli`) and whether `s-90.megavid.se` returns.
-2. That megavid still keys on **MAL** ids, and whether `status` can still be `countdown`.
-3. That `aniwatchtv.by` still redirects unknown slugs (with `Referer`, and with a mobile UA).
-4. That the `megavid.buzz/vid/…` family still obfuscates extensions and gates by referer.
-5. That token paths survive a full 26-minute episode (mid-session expiry test).
-6. MangaDex `/at-home` node rotation, and that `uploads.mangadex.org` still mirrors `/data/`.
-7. Your egress IP's AniList rate-limit tier.
-8. **The current `smart`-mode default** (direct-vs-proxied segments, `DIRECT_SEGMENT_HOSTS`) and whether any
-   newly listed host such as `echovideo.to` actually serves `ACAO: *` — treat such host lists as claims to test.
-9. Android network-security-config: every host observed is `https`, so no cleartext exception is needed — but
-   pinning to Cloudflare-fronted hosts will break when upstreams rotate.
+## 14. Master table
 
----
-
-## 11. Legal and ethical caveats
-
-1. **The stream path is unlicensed third-party content.** `megavid.buzz` and `aniwatchtv.by` are not rights
-   holders; this app hosts, stores and redistributes nothing — it resolves a URL a third-party site exposes.
-   Publishing an APK that does this in a jurisdiction where it is not permitted carries risk for the
-   publisher, not merely the user. Take advice before distribution; "we only link" is not a defence everywhere.
-2. **No content is redistributed by this codebase.** The media proxy is a pass-through with a referer header
-   and a playlist rewrite; it writes no bytes to disk and no layer archives segments (CDN `s-maxage` is a hint,
-   not storage). Keep it that way — a client that downloads and re-shares episodes changes the posture entirely.
-3. **Licensed manga is not read in-app.** MangaDex removes hosted pages for licensed titles and replaces them
-   with an `externalUrl` to the official publisher. The app surfaces those as outbound links with an explicit
-   "English pages live on the official site" notice and never fetches the official page's images. Do not add a
-   scraper for those URLs. `[code]` `MangaDetailView.tsx` `[live]`
-4. **Prefer official sources.** Metadata here comes from public documented APIs (AniList, MAL via Jikan, Kitsu,
-   MangaDex); discovery, library, schedule, characters and manga metadata all work without the streaming path,
-   which is therefore removable.
-5. **No keys or secrets are bundled, and none should be.** The Gemini key lives in `.env.local` and is read
-   server-side only; the client has no credentials. Megavid and aniwatch need no key today. The JW Player
-   library key `IDzF9Zmk.js` seen on aniwatch's player page is *their* public embed key — do not copy it in.
-6. **Respect rate limits and identifiers.** Keep MangaDex's descriptive UA and the existing caches; do not strip
-   politeness headers for speed. The `403`/`301` responses in section 7 are refusals — treat them as
-   "not available" rather than something to bypass.
-7. **No DRM circumvention anywhere.** No key extraction, no widevine handling, no token forgery: the pipeline
-   only reads URLs that unauthenticated public pages already expose. Anything needing decryption of a
-   protected stream is out of scope and must stay out.
-8. **Personal data stays local.** Progress is `localStorage` only (`anime:progress:{malId}:{episode}`), no
-   accounts, no server-side user records `[code]` `WatchView.tsx`. Keep the APK local-first; if you add
-   analytics, never log stream URLs — they embed session tokens.
+| Endpoint | Purpose | Upstream | Cache TTL | Failure mode |
+| --- | --- | --- | --- | --- |
+| `GET /api/anime/discover` | trending / airing / movies / search / browse | AniList | 300 s, swr 900 | `502 {error, items:[]}` |
+| `GET /api/anime/{id}` | anime + MAL id + relations + cast + recs | AniList ×5 | 600 s, swr 1800 | `400` bad id; sections degrade to `[]`; `502` if the main query fails |
+| `GET /api/anime/episodes` | episode numbering + AniList entry | AniList + Jikan | 900 s, swr 3600 | Jikan down → generated numbering; `400` bad `mal` |
+| `GET /api/anime/latest` | new-episode feed and feed search | aniwatch WP | 120 s, swr 600 | `502 {error, items:[]}` |
+| `GET /api/anime/source` | resolve one playable stream | aniwatch page → megavid | `no-store` (90 s / 15 s in-process) | `missing`/`countdown`/`error` at 200; `404` unresolvable; `502` throw |
+| `GET /api/characters` | character browse/search | AniList | 600 s, swr 1800 | `502 {error, items:[]}` |
+| `GET /api/characters/{id}` | one character + 12 media | AniList | 3600 s, swr 86400 | `400`; `502` |
+| `GET /api/schedule` | next 40 airings | AniList | 600 s, swr 1800 | `502 {error, items:[]}` |
+| `GET /api/manga/search` | manga list / search | MangaDex `/manga` | 300 s, swr 900 | `502` |
+| `GET /api/manga/{id}` | detail + chapter feed | MangaDex `/manga`, `/feed` | 300 s, swr 900 | `400`; feed failure → `chapters:[]`; `502` |
+| `GET /api/manga/chapter/{id}` | reader pages + prev/next | MangaDex `/chapter`, `/at-home`, `/feed` | `no-store` | `400`; `502` when pages unavailable; nav `null` on feed failure |
+| `GET /api/manga/image` | cover/page image proxy | MangaDex uploads + network | 86400 s, `s-maxage` 31536000 | `400` bad/host; `502` unavailable |
+| `GET/HEAD /api/proxy/media` | HLS/segment/subtitle proxy | any media host | playlists 4 s; segments 86400 s; subs 3600 s | `400`; `502` (404 preserved) |
+| `GET /api/proxy/aniwatch` / `proxy/quotes` | browser aniwatch proxy / random quote | aniwatch WP / animechan → static 10 | 3600 s (quotes 60 s on fallback) | `400`/`502` for aniwatch; quotes never fail |
+| `POST /api/ai` | spoiler-safe AI text | Gemini 2.5 Flash | none | `403` cross-origin; `400`; `500` |
 
 ---
 
-## 12. Verified title fixtures
+# Part II — Upstreams
 
-Probed 2026-10-31 against AniList (`Media(id:)` / `Media(idMal:)`) and
-`megavid.buzz/mal/{mal}/{ep}/sub/source?axsv=loli` (plus `dub` where noted) `[live]`.
+## 15. AniList GraphQL
 
-| Title | AniList id | MAL id | `episodes` | Episode | Result | Source host | Tracks |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Dragon Ball Z | `813` | `813` | 291 | 1 sub, 1 dub | `ok` | `cp.megavid.buzz` | 2 (English + thumbnails); dub 1 |
-| Dragon Ball Super | `21175` | `30694` | 131 | 1 | `ok` | `cp.megavid.buzz` | 4 |
-| Death Note | `1535` | `1535` | 37 | 1 sub, 1 dub | `ok` | `cp.megavid.buzz` | 2; dub 1 (`captions/en.vtt`, `srclang: en`) |
-| One Piece | `21` | `21` | `null` | 1 | `ok` | `cp.megavid.buzz` | 1 |
-| One Piece | `21` | `21` | `null` | **1180** | `ok` | `megavid.buzz/vid/…` (family B) | 2 (`English (CR English)` + thumbnails) |
-| One Piece | `21` | `21` | `null` | 1181 | `missing` (404) | — | 0 |
-| Naruto | `20` | `20` | 220 | 1 | `ok` | `cp.megavid.buzz` | 1 |
-| One Punch Man S1 | `21087` | `30276` | 12 | 1 sub, 1 dub | `ok` | `cp.megavid.buzz` | **19 upstream** (18 langs + thumbnails) → **12 after the cap**; dub 18 |
-| One Punch Man S2 | `97668` | `34134` | 12 | 1 sub, 1 dub | `ok` | `megavid.buzz/vid/…` (single 1080p variant) | 8 upstream → 8 (7 langs + thumbnails); dub 8 |
-| Your Name. (movie) | `21519` | `32281` | 1 | 1 sub, 1 dub | `ok` | `cp.megavid.buzz` | 1; dub 1 |
-| One Punch Man S3 | **no AniList entry** (`Media(idMal:40866)` → `errors: [Not Found]`) | `40866` | — | 1 sub, 1 dub | **`missing`** (404, `retryable: false`) | — | 0 |
-
-Corrections to the fixture list as supplied — several numbers are MAL ids, not AniList ids:
-
-| Brief said | Reality |
+| Property | Value |
 | --- | --- |
-| "DBZ 813" | Correct both ways: AniList `813` = MAL `813` |
-| "DBS 30694" | `30694` is the **MAL** id; AniList id for Dragon Ball Super is `21175`. (AniList id `30694` is *Makai Senki Disgaea 2*, MAL `694`.) |
-| "Death Note 1535" | Correct both ways |
-| "One Piece 21 (ep 1180 works)" | Correct; 1180 playable, 1181 not yet available |
-| "Naruto 20" | Correct both ways |
-| "OPM S1 30276" | `30276` is the **MAL** id; AniList id is `21087` |
-| "OPM S2 34134" | `34134` is the **MAL** id; AniList id is `97668` |
-| "Your Name 32281 (AniList 21519)" | Correct pair: AniList `21519` ↔ MAL `32281` |
-| "OPM S3 MAL 40866 (missing)" | Correct: megavid returns `missing`/404 and AniList has no entry for MAL `40866` |
+| Base | `https://graphql.anilist.co`, **POST only** — `GET` returns `404 {"errors":[{"message":"Not Found.","hint":"Use POST request to access graphql subdomain.","status":404}]}` `[live]` |
+| Auth | none for public data `[code]` `[live]` |
+| Headers | `Content-Type: application/json`, `Accept: application/json` `[code]` |
+| Rate limit | `x-ratelimit-limit: 30`/min with `x-ratelimit-remaining`, exposed via `access-control-expose-headers` `[live]` |
+| Cache in app | `revalidate: 300` (shared client), `3600` (episodes lookup) `[code]` |
+| Grade | **A** — every probe `200`; the most stable dependency in the app |
 
----
+Errors `[code]`: non-OK status throws `AniList {status}`; a `200` carrying `errors` also throws
+(`"AniList query error"`), so GraphQL errors never surface as silent nulls.
+
+`MEDIA_FIELDS` (`lib/anime/queries.ts`):
+
+```graphql
+id title { english romaji native } coverImage { large medium }
+bannerImage format averageScore seasonYear episodes status genres
+nextAiringEpisode { episode airingAt }
+studios(isMain: true) { nodes { name } }
+```
+
+`anilist-extra.ts` keeps a narrower copy without `nextAiringEpisode`/`studios` for browse and character media.
+
+| Query | Variables | Shape | Used by |
+| --- | --- | --- | --- |
+| `TRENDING` / `TOP_AIRING` / `POPULAR_MOVIES` | — | `Page(perPage: 20) { media(…) }` with `sort: TRENDING_DESC`, `status: RELEASING + POPULARITY_DESC`, `format: MOVIE + POPULARITY_DESC` | discover `trending` / `airing` / `movies` |
+| `SEARCH` | `$q, $page` | `media(search: $q, sort: SEARCH_MATCH)`, perPage 20 | discover `search`, slug resolution |
+| `DETAILS` | `$id` | `Media(id:)` + `MEDIA_FIELDS` + `description(asHtml:false)` | `/api/anime/[id]` |
+| `CHARACTERS` | `$id` | `characters(sort: ROLE, perPage: 25) { edges { role node voiceActors(language: JAPANESE) } }` | `/api/anime/[id]` |
+| `RECOMMENDATIONS` | `$id` | `recommendations(sort: RATING_DESC, perPage: 20) { nodes { mediaRecommendation } }` | `/api/anime/[id]` |
+| `RELATIONS` | `$id` | `relations { edges { relationType node { … } } }` | season switcher |
+| `EPISODES_BY_MAL` (inline) | `$idMal` | `Media(idMal:, type:) { … episodes seasonYear nextAiringEpisode }` | `/api/anime/episodes` |
+| `BROWSE_ANIME` | `$genre,$year,$season,$format,$status,$sort` | `Page(perPage: 30) { media(type: ANIME, …) }` | discover `browse` |
+| `BROWSE_CHARACTERS` | `$page, $search` | `Page(perPage: 30) { characters(sort: FAVOURITES_DESC, search:) }` | `/api/characters` |
+| `CHARACTER_FULL` | `$id` | `Character(id:) { … media(sort: POPULARITY_DESC, perPage: 12) }` | `/api/characters/[id]` |
+| `SCHEDULE` | `$page` | `Page(perPage: 40) { airingSchedules(notYetAired: true, sort: TIME) }` | `/api/schedule` |
+| `GENRE_COLLECTION` | — | `GenreCollection → string[]` | `BrowseView.tsx` server-side, **no HTTP route** |
+| `ANIME_EXTRAS` | `$id` | `Media(id:) { idMal coverImage { color } }` | detail `malId`/`accentColor`, slug resolution |
+
+Browse query verbatim (`anilist-extra.ts`) — absent filters are omitted, never sent as `null`, and `sort`
+always defaults to `["POPULARITY_DESC"]` `[code]`:
+
+```graphql
+query ($genre: String, $year: Int, $season: MediaSeason, $format: MediaFormat, $status: MediaStatus, $sort: [MediaSort]) {
+  Page(perPage: 30) {
+    media(type: ANIME, genre: $genre, seasonYear: $year, season: $season,
+          format: $format, status: $status, sort: $sort) { id title { english romaji native } … }
+  }
+}
+```
+
+Response shape (abridged) and mapping `[code]`: `title` falls back `english → romaji → native → "Untitled"`;
+`cover` falls back `coverImage.large → medium → ""`; `averageScore` becomes `score/10`.
+
+```json
+{ "data": { "Page": { "media": [{ "id": 195604,
+  "title": { "english": "Black Clover Season 2", "romaji": "Black Clover 2nd Season", "native": null },
+  "format": "TV", "averageScore": 87, "seasonYear": 2026, "episodes": null, "status": "RELEASING",
+  "genres": ["Action", "Adventure", "Fantasy"],
+  "nextAiringEpisode": { "episode": 5, "airingAt": 1793550000 },
+  "studios": { "nodes": [{ "name": "Studio Pierrot" }] } }] } } }
+```
+
+## 16. Jikan
+
+| Property | Value |
+| --- | --- |
+| Base | `https://api.jikan.moe/v4` |
+| Endpoint used | `GET /anime/{malId}/episodes` — the only Jikan call in the repo `[code]` |
+| Fields read | `data[].mal_id`, `data[].title`, `data[].filler` `[code]` |
+| Headers / cache | `Accept: application/json`; `revalidate: 3600`; `AbortSignal.timeout(4000)`; 5 min negative cache per MAL id `[code]` |
+| Rate limit | 3 req/s and 60 req/min per IP as published `[unverified]` — host unreachable |
+| Grade | **F** on 2026-10-31; **D** historically |
+
+Live `[live]`: **six consecutive attempts returned `000`** after the full 20 s timeout; DNS resolves
+(`135.181.39.91`) but the TLS handshake never completes, reproducing the "`000` failures" of the earlier draft
+exactly. Consequence: every sampled `/api/anime/episodes` response reported `source: "generated"` `[live]` —
+AniList supplied totals and the app synthesised numbering, with a 500-episode floor for a `RELEASING` show that
+has no announced total (§4). Clients must not assume `episodes[].title` is non-null or that `source === "jikan"`.
+
+## 17. Kitsu
+
+| Property | Value |
+| --- | --- |
+| Base | `https://kitsu.io/api/edge` |
+| Endpoints | `GET /anime?filter[text]={q}&page[limit]=20`, `GET /anime?sort=-userCount&page[limit]=20` `[code]` |
+| Headers | **`Accept: application/vnd.api+json` is mandatory** — without it `406 {"errors":[{"title":"Not acceptable","detail":"All requests must use the 'application/vnd.api+json'…"}]}`; with it `200` `[live]` |
+| Fields read | `attributes.titles.en`, `canonicalTitle`, `posterImage.original\|large`, `coverImage.original`, `subtype`, `averageRating`, `startDate` `[code]` |
+| Grade | **B** — works, unused in production |
+
+Purpose: a secondary discovery/cross-check path only. `lib/anime/kitsu.ts` is imported by its test alone — no
+route, no component `[code]`. `score` maps as `Math.round(averageRating)/10`, the same 0–10 scale as AniList.
+
+## 18. Quotes (animechan)
+
+`https://animechan.io/api/v1/random`, no auth, `Accept: application/json`, 4 s timeout, fields
+`data.anime.name`, `data.character.name`, `data.content` `[code]`. Live: `404` on `/api/v1/random`, `/api/v1/quotes`
+and `/api/v1/quotes/random`, while the host root serves `200` HTML `[live]`. Grade **F** — decorative widget only,
+permanently served from the bundled 10-quote fallback.
+
+## 19. aniwatch WordPress API
+
+| Property | Value |
+| --- | --- |
+| Base / API | `https://aniwatchtv.by`, `https://aniwatchtv.by/wp-json/wp/v2` `[code]` |
+| Auth | none (public WordPress REST) |
+| Headers | `User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36` + `Referer: https://aniwatchtv.by/` per the code's requirement `[code]`; `[live]` both a browser UA and an empty UA returned `200`, so the gate was not enforced that day — send both anyway |
+| Cache | `revalidate: 300`; browser calls route through `/api/proxy/aniwatch` `[code]` |
+| Grade | **B+** — fast and reliable now, but a third-party WordPress theme whose slugs and player paths can change |
+
+| Call | Purpose |
+| --- | --- |
+| `/posts?page=&per_page=&orderby=date&order=desc` | latest-episode feed (`per_page` max 100 upstream, route clamps to 30) |
+| `/posts/{id}` | one episode post |
+| `/posts?categories={id}&per_page=100&orderby=date&order=desc` | all episodes of a series (`EpisodeList.tsx`) |
+| `/posts?search={q}` | **returns 0 rows** on this install `[live]`; no longer used by the app `[code]` |
+| `/posts?slug={slug}&per_page=1` | slug → post title; exact slugs still answer `200` with one row `[live]`, but the code treats it as unreliable and derives the title from the slug instead `[code]` |
+| `/categories?page=&per_page=100&orderby=count&order=desc` | series list |
+| `/categories?search={term}&per_page=10` | series lookup — the term **must be hyphenated** (`one-punch-man`); `one%20punch%20man` returns 0 rows `[live]`. Used by `AnimeDetail.tsx` (with a loosening ladder) and by `searchPosts()` for feed search |
+
+The raw payload is far larger than what is kept — `guid`, `yoast_head` and `content` are discarded;
+`WpPostRawSchema` reads `id, date, slug, link, title.rendered, categories, tags` and emits:
+
+```json
+{ "id": 35890, "date": "2026-10-31T02:16:00", "slug": "…-episode-5-english-subbed",
+  "title": "… Episode 5 English Subbed", "link": "https://aniwatchtv.by/…/",
+  "categoryIds": [2493], "tags": [] }
+```
+
+**Latest-episode mapping and its limit.** slug → `/api/anime/source?slug=…` → megavid MAL id. The category
+taxonomy is not a catalogue: `categories?search=one piece` returned `(105, count 21, "One Piece")` — 21 indexed
+posts for a 1100+ episode series `[live]`. That is why navigation comes from AniList/Jikan (§4) and this feed is
+only "new episodes" plus "which slug to open".
+
+## 20. Streaming pipeline: aniwatch → player → megavid
+
+Verified chain, executed end-to-end for Death Note ep. 1 `[live]`:
+
+```
+1. GET https://aniwatchtv.by/{slug}/            200 text/html (~204 KB)
+2.   first <iframe src> = https://aniwatchtv.by/wp-content/themes/animestream-child/player/?source=embed&url=<opaque token>
+3. GET that player page                         200 text/html (~9 KB)
+4.   player page embeds <iframe src="https://megavid.buzz/mal/1535/1/sub">
+5. GET https://megavid.buzz/mal/{mal}/{ep}/{sub|dub}/source?axsv={provider}  200 JSON → /api/proxy/media
+```
+
+Two consequences of step 2: the iframe `src` no longer carries a megavid URL (the `url=` value is an opaque
+token), so scraping only works because step 3 embeds it; and if step 3 changes, `resolveTargetFromSlug()` throws
+and the route falls back to `resolveSlugToMal()` `[code]`. A second indirection, `player/?source=blogger` →
+JW Player → signed Google Video MP4, is what `/api/anime/source` uses as its last resort for episodes megavid does
+not carry (`type: "mp4"`, `provider: "aniwatch"`, §6) `[code]`; only the token form was observed playing `[live]`.
+
+Source JSON contract `[live]` (Death Note ep. 1, `axsv=loli`):
+
+```json
+{ "status": "ok",
+  "source": "https://cp.megavid.buzz/hls/1e810e75-bc54-4101-8038-e891e23ce7ff/playlist.m3u8",
+  "tracks": [ { "file": "https://megavid.buzz/sub/…/3d69e3d8….vtt", "label": "English",
+                "kind": "captions", "default": true },
+              { "file": "https://megavid.buzz/sub/…/thumbnails.vtt", "label": "", "kind": "captions",
+                "default": false } ],
+  "mega": true, "animex": false, "providers": [], "chapters": [], "type": "hls" }
+```
+
+| Field | Meaning | Observed variation |
+| --- | --- | --- |
+| `status` | `ok \| missing \| countdown \| error` | only `ok` and `missing` reproducible |
+| `source` | master or MP4 URL | `cp.megavid.buzz/hls/{uuid}/playlist.m3u8` (mega) or `megavid.buzz/vid/{token}/…` (vid family) |
+| `type` | `hls \| mp4` | **absent** on the `/vid/` family, `"hls"` on the `cp.` family; `mega.ts` defaults to `"hls"` unless exactly `"mp4"` `[code]` |
+| `tracks` | subtitle/thumbnail WebVTT | 0–37 entries; `label` may be `""`, `kind` is `captions` |
+| `mega` | `cp.megavid.buzz` family | `true` for loli on most titles |
+| `animex` | `s-90.megavid.se` family | `true` for zuna/yuki/sora/nero — all dead |
+| `providers` | alternatives | `[]` on mega responses, 5 entries on animex responses (`zuna, yuki, sora, loli, nero` with tips like `"Sub and dub, HLS streams"`) |
+| `chapters` | intro/outro markers | `[]` on loli; animex carried `Intro 0–85`, `Outro 1286–1357` |
+| `provider` / `message` / `iframeUrl` | answering provider / reason / countdown embed | `provider` on animex only; `iframeUrl` only with `countdown` `[code]`, not reproduced. `/api/anime/source` can also answer with `provider: "aniwatch"` and `type: "mp4"` (mirror fallback, §6) |
+
+Provider order `PROVIDER_ORDER = ["loli"]` — every other `axsv` value returns `status:"ok"` pointing at the dead
+`s-90.megavid.se` host, so keeping them only added 3–9 s of timeout latency per failure `[code]`. A pinned
+`?provider=` still goes first, then `PROVIDER_ORDER`. A candidate must be `status === "ok"` with a `source` that
+passes `isValidPlaylist()` — a `Range: bytes=0-512` fetch whose body starts with `#EXTM3U` `[code]`. Measured for
+Death Note ep. 1 sub `[live]` (before the list was trimmed to `loli`):
+
+| Provider | `status` | `mega`/`animex` | `source` host | Usable |
+| --- | --- | --- | --- | --- |
+| `loli` | `ok` | true/false | `cp.megavid.buzz` | **yes** |
+| `zuna` | `ok` | false/true | `s-90.megavid.se` (NXDOMAIN) | no — playlist probe fails |
+| `yuki` | `ok` | false/true | `s-90.megavid.se` | no |
+| `sora` | `ok` | false/true | `s-90.megavid.se` | no (advertised in `providers`, never in `PROVIDER_ORDER`) |
+| `nero` | `ok` | false/true | `s-90.megavid.se` | no |
+
+**`loli` is the only working provider.** On `sub`, `status: "missing"` short-circuits the loop (no point trying
+other providers for a nonexistent episode); on `dub` it continues so a provider with a dub track can still answer
+`[code]`. Timeouts and caches `[code]`: 12 s per fetch, `no-store`; source cache 90 s (30 s countdown, 15 s
+failure); slug target 10 min; slug→MAL 30 min including negatives; `filterTracks()` DNS-checks up to 12 subtitle
+hosts at 1.5 s each and drops dead ones. Total exhaustion throws
+`"Every stream provider is unavailable right now. Try again in a moment."` → `502`.
+
+## 21. The referer/CORS gate
+
+An earlier draft claimed `/vid/` playlists and segments return `403` without a `Referer`. What is observable
+`[live]` is narrower: the trigger is the **`Origin` header**, i.e. a genuine cross-origin browser request:
+
+| Request shape | `/vid/…/master.m3u8` | `/vid/…/seg-f1-00000.jpg` | `/sub/…/en.vtt` |
+| --- | --- | --- | --- |
+| bare `curl` | 200 | 200 | 200 |
+| `Origin: http://localhost:3100` | **403** | **403** | **403** |
+| `Origin` + `Referer: https://megavid.buzz/` | 200 | 200 | 200 |
+| `Referer: http://localhost:3100/` only | 200 | 200 | 200 |
+| `Sec-Fetch-Mode: cors` + `Sec-Fetch-Site: cross-site` only | 200 | — | — |
+
+Response headers on those endpoints `[live]`:
+
+```
+access-control-allow-origin: https://megavid.buzz      ← pinned, not *
+access-control-allow-headers: *
+content-type: application/vnd.apple.mpegurl   (playlists) | video/mp2t (segments, any extension)
+cache-control: public, max-age=14400          (master playlist)
+```
+
+Two independent blocks — a 403 when `Origin` is present, and an `ACAO` naming only megavid — and a server-side
+proxy defeats both simply by not sending `Origin`.
+
+**The `/vid/` master playlist** `[live]`: `#EXT-X-STREAM-INF` entries named `1080p` (BW 5500000), `720p`
+(BW 2800000) and a 360p variant on some titles; variants are 354-segment VOD playlists whose segment extensions
+are **obfuscated** — one playlist contained `.jpg, .html, .js, .css, .ico, .png, .txt, .webp` — yet every segment
+is `video/mp2t` starting with sync byte `0x47`. Never infer media type from the extension and never filter by
+suffix.
+
+**The `cp.`/`cdn.` family is permissive** `[live]`:
+
+| Host | `ACAO` | With `Origin` | Segment `Content-Type` |
+| --- | --- | --- | --- |
+| `cp.megavid.buzz` (master + variants) | `*` | 200 | `application/vnd.apple.mpegurl` |
+| `cdn.megavid.buzz` (`.ts` segments) | `*` | 200 | **`text/vnd.trolltech.linguist; charset=utf-8`** — body is MPEG-TS |
+
+`cdn.megavid.buzz` also exposes `access-control-allow-methods: GET, HEAD, OPTIONS` and
+`access-control-expose-headers: content-length, content-range, accept-ranges`. Technically browser-fetchable;
+the bogus `Content-Type` is harmless because hls.js reads bytes.
+
+**`DIRECT_SEGMENT_HOSTS`** in `proxy/media/route.ts` is `["echovideo.to"]` — hosts believed to serve segments with
+permissive CORS; everything else is proxied even in `smart` mode, because megavid-family hosts reject direct
+cross-origin segment requests `[code]`. `echovideo.to` has **no DNS record** `[live]`, so the list currently
+whitelists nothing that exists and smart mode proxies every segment. That is the correct default given the table
+above: the only cost is throughput, and the alternative is 403s or CORS errors in the browser. Playlist lines
+(including `URI="…"` attributes such as `#EXT-X-MAP`) are rewritten in **both** modes; `mode` only governs
+segments — `smart` proxies a segment unless its host is listed, `full` proxies all of them.
+
+### Verified end-to-end: aniwatch mirror fallback `[live]`
+
+MAL `40866` (the OPM S3 fixture that megavid answers `{"status":"missing","code":404}`) resolves through the
+mirror:
+
+```
+GET /api/anime/source?slug=one-punch-man-season-3-episode-1-english-subbed&mal=40866&ep=1&audio=sub
+-> {"status":"ok","type":"mp4","provider":"aniwatch","source":"https://rr2---sn-…googlevideo.com/videoplayback?…"}
+
+GET /api/proxy/media?url=<that>&ref=https://megavid.buzz/&mode=smart   (Range: bytes=0-8191)
+-> 206, content-type: video/mp4, content-range: bytes 0-8191/77051410, magic ftypmp42
+```
+
+Caveats: single quality (`itag=18`, 360p), the URL is signed and expiring (`expire=`), it carries
+`ip=`/`mip=`/`ipbypass=yes`, and there are **no CORS headers**, so it must be proxied. The same request also
+proves the proxy UA constraint below: the full Chrome UA yields `403` on `videoplayback`.
+
+## 22. Subtitle tracks
+
+| Aspect | Detail |
+| --- | --- |
+| Source | `tracks[]` in the megavid source JSON `[code]` `[live]` |
+| Mega-family host | `https://megavid.buzz/sub/{token}/{video-token}/{name}.vtt`, served `text/vtt`, `ACAO: https://megavid.buzz` `[live]` |
+| Gate is path-specific | Measured 2026-10-31 `[live]`: `/vid/…seg-*.jpg` → **200 bare**, **403 with a foreign `Origin`**, 200 with megavid `Origin`+`Referer`; `/sub/…vtt` → **403 bare**, **403 with a foreign `Referer`**, 200 with a megavid `Origin` **or** `Referer`; `cp./cdn.megavid.buzz` → ungated 200 |
+| Labels / thumbnails | `English`, `Arabic`, `Portuguese (Portuguese - (Brazilian))`, `Spanish (Spanish - (LA))`, often `""`; a second `captions` entry points at `thumbnails.vtt` and must stay out of the subtitle menu `[code]` `[live]` |
+| Animex-family host | `https://s-90.megavid.se/uwu/…/asset.txt` — **NXDOMAIN**, every track dead `[live]` |
+| Dead hosts / client | `filterTracks()` drops unresolvable hosts so a dead CDN never breaks playback, and `WatchView` rewrites every `track.file` through `/api/proxy/media` (smart) `[code]` |
+| SRT → VTT | the proxy buffers `.vtt/.srt/.ass/.ssa/.txt`, strips a BOM, returns it unchanged if it starts with `WEBVTT`, else converts `HH:MM:SS,mmm` → `HH:MM:SS.mmm` and prepends `WEBVTT\n\n` `[code]` |
+| Limit | only the timing separator is converted — ASS/SSA `Dialogue:` lines are not turned into cues, so an `.ass` input yields a valid but empty WebVTT `[code]` |
+
+Verified `[live]`: the Death Note ep. 1 English track returned `200 text/vtt`, 21 049 bytes, starting
+`WEBVTT\n\n00:02:07.600 --> 00:02:08.520`; the same URL with `Origin` returned `403`.
+
+## 23. Alternative source family: megaplay + anikoto
+
+Evaluated as a second pipeline; not wired into the app's routes, but the better architecture for a new client
+because it exposes JSON instead of HTML.
+
+| Property | Value |
+| --- | --- |
+| Base | `https://anikotoapi.site` `[live]`; auth: none observed `[live]` |
+| Domains advertised | `anikoto_domains: ["anikototv.to", "anikoto.cz"]` in every payload; both resolve `[live]` |
+| Catalogue | `pagination.total: 9116`, `total_pages: 92` at `per_page=100` `[live]` |
+| Rate limit | 60 req / 120 s `[unverified]` |
+| Posters | `cdn.anipixcdn.co` `[live]`; the apex `anipixcdn.co` has no DNS record `[live]` |
+| Grade | **B** — reachable and self-describing, but episode data looked stale (newest sampled `updated_at` was 2025-02-22 and 2024-10-18) |
+
+| Call | Shape |
+| --- | --- |
+| `GET /recent-anime` | `{ ok, anikoto_domains: [...], data: [...], pagination: { page, per_page, total, total_pages } }` |
+| `GET /series/{id}` | `{ ok, anikoto_domains, data: { anime: {…}, episodes: […] } }`; unknown id → `404 {"ok":false,"error":"Series not found","code":"not_found"}` `[live]` |
+| `GET /` | HTML landing page, `200` `[live]` |
+
+```json
+{ "anime": { "id": 2, "title": "Loner Life in Another World", "slug": "loner-life-…", "mal_id": "57891",
+             "ani_id": "173693", "rating": "PG-13", "status": "Finished Airing", "year": 2024,
+             "score": "6.23", "episodes": "12",
+             "poster": "https://cdn.anipixcdn.co/thumbnail/63ea2c642aaee001d818604fe1d9a811.jpg" },
+  "episodes": [{ "id": 111982, "title": "Loner with the Worst Skills", "number": 1,
+                 "episode_embed_id": "128280", "updated_at": "2025-02-22 20:20:48",
+                 "embed_url": { "sub": "https://megaplay.buzz/stream/s-2/128280/sub",
+                                "dub": "https://megaplay.buzz/stream/s-2/128280/dub" } }] }
+```
+
+`mal_id`/`ani_id` make this family mappable onto the app's MAL-based pipeline. **megaplay** `[live]`: pattern
+`https://megaplay.buzz/stream/s-2/{episodeEmbedId}/{sub|dub}`, no redirect, no auth, plain UA — but every sampled
+id (`128280`, `105621`, bare `s-2/128280`, `s-2/1/sub`) returned `200 text/html` with an **error page**
+(`<title>Error - MegaPlay</title>`, 3 545 bytes, no `.m3u8`). HTTP 200 is therefore not a success signal there and
+playback extraction stays `[unverified]`; expired embed ids are the likelier reading than a dead service.
+
+## 24. MangaDex
+
+| Property | Value |
+| --- | --- |
+| Base / uploads / data | `https://api.mangadex.org` / `https://uploads.mangadex.org` / `https://{node}.mangadex.network` |
+| Auth / headers | none; `User-Agent: AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)`, `Accept: application/json` `[code]` |
+| Rate limit | `x-ratelimit-limit: 40`/min plus `x-ratelimit-remaining` and `x-ratelimit-retry-after` `[live]` |
+| Cache in app | `revalidate: 300` default, `600` chapter/feed, `3600` title, `no-store` `/at-home` `[code]` |
+| Grade | **A−** — stable and well documented, with a strict validator that fails loudly on wrong parameter names |
+
+**The list-vs-feed language parameter (critical)** `[live]`:
+
+| Endpoint | Correct | Wrong result |
+| --- | --- | --- |
+| `GET /manga` (list/search) | `availableTranslatedLanguage[]=en` → `200` | `translatedLanguage[]=en` → **`400`** `{"result":"error","errors":[{"status":400,"title":"validation_exception","detail":"Error validating : The property translatedLanguage is not defined and the definition does not allow additional properties"}]}` |
+| `GET /manga/{id}/feed` | `translatedLanguage[]=en` | `availableTranslatedLanguage[]` is not a feed parameter `[code]` |
+
+`hasAvailableChapters=true` additionally restricts the list to titles with at least one readable chapter —
+`/manga?limit=1&availableTranslatedLanguage[]=en&hasAvailableChapters=true` → `200` `[live]`; without it, licensed
+titles with zero hosted chapters dominate results.
+
+| Call | App params |
+| --- | --- |
+| `GET /manga` | `limit=24`, `offset=page*24`, `contentRating[]=safe`, `contentRating[]=suggestive`, `includes[]=cover_art`, `availableTranslatedLanguage[]=en`, optional `hasAvailableChapters`, `title`, `order[…]` `[code]` |
+| `GET /manga/{id}` | `includes[]=cover_art&author&artist` `[code]` |
+| `GET /manga/{id}/feed` | `limit=500`, `translatedLanguage[]=en`, `order[chapter]=desc\|asc`, `includeFutureUpdates=0` `[code]` |
+| `GET /chapter/{id}` | `includes[]=manga`; `GET /at-home/server/{chapterId}` is `no-store` `[code]` |
+| Covers / pages | `uploads.mangadex.org/covers/{mangaId}/{file}.512.jpg`, `{baseUrl}/data/{hash}/{file}` and `…/data-saver/…`, always via `/api/manga/image` `[code]` |
+
+Chapter attributes `[live]`: `chapter, volume, title, pages, externalUrl, publishAt, readableAt,
+translatedLanguage, isUnavailable, createdAt, updatedAt, version`.
+
+```json
+{ "result": "ok", "baseUrl": "https://cmdxd98sb0x3yprd.mangadex.network",
+  "chapter": { "hash": "554b6d5bcece279f439171f5a7d428c3", "data": ["1-….png"], "dataSaver": ["1-….png"] } }
+```
+
+`baseUrl` rotates, which is why `/api/manga/chapter/[id]` is `no-store` and `/api/manga/[id]` is not. An unknown
+chapter id gives `404 {"result":"error","errors":[{"title":"not_found_http_exception", …}]}` `[live]`.
+
+**Licensed titles / external-only chapters** `[live]`: the entry survives, the pages do not — chapter rows carry
+`pages: 0` plus a non-null `externalUrl` to the publisher, and `/at-home` returns `200` with `data: []`.
+
+| Title | Chapters | Hosted (`pages > 0`) | External-only |
+| --- | --- | --- | --- |
+| Na Honjaman Level-Up (Solo Leveling) | 16 | 0 | 16 (all `webnovel.com`) |
+| Sono Bisque Doll wa Koi o Suru | 220 | 0 | 220 |
+| Chainsaw Man | 100 | **97** | 3 |
+
+Rule the app already encodes: `pages: 0` + `externalUrl` → official link, never a reader request `[code]`.
+
+## 25. Dead and rejected endpoints
+
+All probed 2026-10-31 with a browser UA `[live]`.
+
+| Service / host | URL | Status | Detail | Verdict |
+| --- | --- | --- | --- | --- |
+| Consumet | `api.consumet.org/anime/gogoanime/one-piece` | **301** | → `github.com/consumet/api.consumet.org…` | rejected, public instance retired |
+| Anify | `anify.tv/api/anime` | **301** | redirects to itself (`/api/anime` → `/api/anime`), loop | rejected |
+| AllAnime | `api.allanime.day/api?query=…` | **403** | Cloudflare `<title>Just a moment...</title>` | rejected, challenge-gated |
+| AnimePahe | `animepahe.com/api?…` | 301 → **403** | apex → `animepahe.pw`, which 403s the API | rejected |
+| Anitaku | `anitaku.bz` | **200** | reachable; `anitaku.to` has no DNS (`000`) | alive, unused |
+| `s-90.megavid.se`, `echovideo.to` | any | **000** | `nodename nor servname provided, or not known` | **NXDOMAIN** — `s-90` is where every `animex` source points; `echovideo.to` remains in `DIRECT_SEGMENT_HOSTS`, hence that list whitelists nothing (it is kept only as a hook for a future ACAO-`*` CDN) |
+| animechan / Jikan | `animechan.io/api/v1/random` **404** (host root HTML `200`) / `api.jikan.moe/v4/anime/1535/episodes` **000** | 404 / 000 | animechan's API is gone; Jikan's DNS is fine but TLS never completes in 20 s | animechan: bundled fallback. Jikan: degraded, generated numbering |
+| `anipixcdn.co` apex | — | **000** | DNS failure; `cdn.anipixcdn.co` resolves | use `cdn.` only |
+
+Only AniList, MangaDex and aniwatch WordPress answered consistently well throughout testing.
+
+## 26. Verified title fixtures
+
+AniList/MAL mappings re-queried live; playability probed against `megavid.buzz/mal/{mal}/{ep}/{audio}/source?axsv=loli`.
+
+| Title | AniList | MAL | Episodes | Year | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Black Clover (S1) / Season 2 | **97940 / 195604** | **34572 / 61967** | 170 / `null` | 2017 / 2026 | S1 is `FINISHED` and also appears in `discover?kind=trending`; S2 is `RELEASING` with no episode count yet |
+| ONE PIECE | **21** | **21** | `null` | 1999 | ep. **650** and **1180** both verified playable via `loli` |
+| One-Punch Man S1 / S2 / S3 | **21087 / 97668 / 153800** | **30276 / 34134 / 52807** | 12 each | 2015 / 2019 / 2025 | all verified playable: S1 on `cp.megavid.buzz` (19 tracks), S2/S3 on `megavid.buzz/vid/…` (`type` absent). The old "MAL 40866 missing" note used a **wrong id** — 52807 is correct |
+| Your Name. | **21519** | **32281** | 1 (`MOVIE`) | 2016 | `/api/anime/episodes?mal=32281` → `isMovie: true`, one episode `"Movie"` |
+| Death Note | **1535** | **1535** | 37 | 2006 | canonical per-episode fixture; sub and dub both `ok` on ep. 1 |
+| Dragon Ball Super | **21175** | **30694** | 131 | 2015 | verified playable |
+| Blue Box Season 2 | **189123** | **61323** | 12 | 2026 | 12-episode fallback fixture |
+
+Non-anime fixtures `[live]`: manga `32d76d19-8a05-4db0-9fc2-e0b0648fe9d0` (Na Honjaman Level-Up, licensed) for
+`pages: 0` + `externalUrl`; manga `a77742b1-befd-49a4-bff5-1ad4e6b0ef7b` (Chainsaw Man, 97 hosted chapters) and
+its chapter `77fc6e02-a381-411d-ace6-4c00deacadb4` for the reader (23 pages, nav populated); aniwatch post `35890`
+(latest feed) and slug `death-note-episode-1-english-subbed` for the full chain — the bare slug
+`death-note-episode-1` is a 301; characters `17` (Naruto) and `40` (Luffy); anikoto series `2` (MAL 57891).
+
+## 27. Failure playbook
+
+| Symptom | Cause | Action |
+| --- | --- | --- |
+| "Every stream provider is unavailable" | all providers failed the playlist probe | wait, retry (failure cached 15 s only), then `refresh=1` or another episode |
+| `status: "missing"` on sub | episode absent upstream | "not found"; on dub offer "watch in sub" — the client already does |
+| `ok` but player stalls / no subtitles | segments blocked, or the track host is dead (`s-90.megavid.se`) | flip `mode=full`, then advance providers (`handleFatal`); subtitle loss from a dead host is expected, so never retry it in the player |
+| `403` on a `/vid/`/`/sub/` URL, or missing segments | direct browser request (has `Origin`), or relative variant URLs | route everything through `/api/proxy/media` and never fetch these client-side; re-fetch playlists instead of caching them beyond 4 s |
+| `source: "generated"` on episodes | Jikan slow/down | expected; render numbers without titles; respect the 5 min negative cache |
+| AniList `429` | > 30 req/min | batch queries with GraphQL aliases (Appendix A); rely on `s-maxage` |
+| MangaDex `400 validation_exception` | wrong language param | list → `availableTranslatedLanguage[]`, feed → `translatedLanguage[]` |
+| Blank manga pages / image `502` | `/at-home` node rotated, external-only chapter, or dead node | re-request the chapter route (`no-store`); `pages.length === 0` → render `externalUrl`; images already retry `uploads.mangadex.org` |
+| AI `403 forbidden` / same quote repeatedly | cross-origin caller / animechan 404 | AI is same-origin only, no token; quotes fall back to 10 bundled entries |
+| `404` from `/api/anime/source` | slug → MAL failed | open the episode from the anime page (the message says so) |
+| Stale feed | aniwatch params changed | `s-maxage=120` bounds it; verify with the wp-json probe |
+
+Rules worth encoding in any client: (1) never treat HTTP 200 as success for `/api/anime/source` or megaplay —
+read `status`/inspect the body; (2) never build a megavid URL client-side; (3) never fetch media directly, always
+`/api/proxy/media`; (4) never cache `/api/anime/source` or `/api/manga/chapter/[id]`; (5) degrade, don't fail —
+every metadata endpoint already substitutes an empty array or a generated list.
+
+## 28. Mobile / APK reuse notes
+
+**What must stay server-side:** aniwatch → megavid resolution (slug scraping, provider iteration, `#EXTM3U`
+validation, DNS filtering, and a `Referer` the platform will not send); media proxying (`/vid/` and `/sub/` 403
+any request carrying `Origin` and pin `ACAO` to megavid, and a client cannot strip its own `Origin`); aniwatch
+HTML parsing (browser UA + a theme-specific player page); rate limiting (30 req/min AniList, 3 req/s Jikan, shared
+across devices via one cache); manga images (rotating data hosts, allowlist and `uploads` fallback are server
+policy); and AI keys (`GEMINI_API_KEYS` must never ship in an APK).
+
+Minimum server surface for an APK: Part I minus the HTML-dependent pieces — `discover`, `[id]`, `episodes`,
+`latest`, `source`, `characters`, `characters/[id]`, `schedule`, `manga/*`, `proxy/media`, `ai`.
+
+**Headers and CORS.** `/api/proxy/media` is the only endpoint that must be cross-origin-reachable, and
+`vercel.json` already adds `Access-Control-Allow-Origin: *`, `Allow-Headers: *`, `Allow-Methods: GET,HEAD,OPTIONS`
+for it `[code]`. Every other endpoint sends no `ACAO`, so a WebView must be same-origin or the server needs an
+allowlist for a native client; `/api/ai` rejects any foreign `Origin`/`Referer`; `/api/proxy/aniwatch` has **no host
+allowlist** — add one before exposing it to untrusted clients, or the app becomes an open proxy.
+
+**HLS.** Use hls.js (`^1.7.4`, as the web app does) or native HLS; never infer `.m3u8` from the URL, since
+`/vid/` variants are `.m3u8` while segments are `.jpg`/`.js`/`.html`. Segments are MPEG-TS even when labelled
+`text/vnd.trolltech.linguist` — sniff the bytes rather than trusting `Content-Type`. Keep the escalation ladder
+`smart` → `full` → next provider → hard error, and persist progress per `malId:episode`
+(`localStorage['anime:progress:{mal}:{ep}']`, cleared past 97 % `[code]`).
+
+**Caching / budgets.** Client-side: `discover`/`manga` 5 min, `anime/[id]`/`characters`/`schedule` 10 min,
+`characters/[id]` 1 h, `episodes` 15 min, `latest` ≤ 2 min, images 24 h; never persist `source` or chapter pages.
+Upstream budgets: AniList 30/min and MangaDex 40/min `[live]`; Jikan 3/s and anikoto 60/120 s `[unverified]`.
+Re-verify from the deployment region (`vercel.json` pins `bom1`) — megavid/Cloudflare behaviour is geography
+sensitive.
+
+## 29. Legal caveats
+
+- **No hosted media.** Nothing here stores, transcodes or re-uploads video; the app resolves a third-party URL and
+  hands the player a proxied copy. `megavid.buzz`, `megaplay.buzz` and `aniwatchtv.by` are independent services
+  with their own terms — resolvable is not licensed, and jurisdiction matters.
+- **The proxy is technical, not legal.** `/api/proxy/media` satisfies `Referer`/CORS requirements browsers cannot
+  meet; it grants no licence and makes the deployer the party serving bytes.
+- **MangaDex within its terms;** public, unauthenticated, rate-limited reads with an identifying `User-Agent` and
+  `Referer: https://mangadex.org/` on images `[code]` — do not strip either. **Licensed manga = official links
+  only:** `pages: 0` + `externalUrl` is the API's own signal to link out.
+- **Secrets and attribution.** `GEMINI_API_KEYS` is quota-bearing and must stay server-side; metadata belongs to
+  AniList and Jikan/MAL, so keep AniList links and MAL ids visible.
 
 ## Appendix A — re-running the checks
 
+`npm run verify:apis` → `node scripts/verify-apis.mjs [baseUrl]` (default `http://localhost:3100`) asserts 18
+internal endpoints plus the full HLS chain — master → variant → first segment, confirming the segment is proxied
+rather than fetched directly. Exit 0 only when everything passes `[code]`.
+
 ```bash
-# AniList must be POSTed; GET returns 404
-curl -s -D - -X POST https://graphql.anilist.co -H 'Content-Type: application/json' \
-  -d '{"query":"{Media(id:813){id idMal episodes}}"}' | grep -i x-ratelimit
+# upstreams — one probe each (the full set is in the git history of this doc)
+curl -s -o /dev/null -w 'anilist   %{http_code}\n' -X POST https://graphql.anilist.co \
+  -H 'Content-Type: application/json' -d '{"query":"{Page(perPage:1){media(sort:TRENDING_DESC,type:ANIME){id}}}"}'
+curl -s -o /dev/null -w 'jikan     %{http_code}\n' --max-time 20 https://api.jikan.moe/v4/anime/1535/episodes
+curl -s -o /dev/null -w 'md-list   %{http_code}\n' 'https://api.mangadex.org/manga?limit=1&availableTranslatedLanguage%5B%5D=en'
+curl -s -o /dev/null -w 'md-broken %{http_code}\n' 'https://api.mangadex.org/manga?limit=1&translatedLanguage%5B%5D=en'
+curl -s -o /dev/null -w 'aniwatch  %{http_code}\n' -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' \
+  -H 'Referer: https://aniwatchtv.by/' 'https://aniwatchtv.by/wp-json/wp/v2/posts?per_page=2&orderby=date&order=desc'
+curl -s -H 'User-Agent: Mozilla/5.0' -H 'Referer: https://megavid.buzz/' \
+  'https://megavid.buzz/mal/1535/1/sub/source?axsv=loli' | jq -c '{status,type,mega,animex,tracks:(.tracks|length)}'
+curl -s https://anikotoapi.site/series/2 | jq -c '.data.episodes[0].embed_url'   # alternative family
 
-# megavid source, one provider at a time (expect 2-6 s)
-curl -s --max-time 15 \
-  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' \
-  -H 'Referer: https://megavid.buzz/' -H 'Accept: application/json' \
-  'https://megavid.buzz/mal/813/1/sub/source?axsv=loli'
+# dead hosts — expect DNS failure (host: NXDOMAIN) / 301 / 403
+host s-90.megavid.se echovideo.to anipixcdn.co
+curl -s -o /dev/null -w 'consumet %{http_code}\n' 'https://api.consumet.org/anime/gogoanime/one-piece'
+```
 
-# prove the referer gate (family-B segment)
-curl -s -o /dev/null -w '%{http_code}\n' 'https://megavid.buzz/vid/<tok>/<tok>/seg-1-f1-v1-a1.jpg'                  # 403
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Referer: https://megavid.buzz/' '…/seg-1-f1-v1-a1.jpg'                  # 200
+The gate isolation §21 rests on:
 
-host s-90.megavid.se        # NXDOMAIN
+```bash
+SRC='https://megavid.buzz/vid/<tok>/<tok>/master.m3u8'; SEG='https://megavid.buzz/vid/<tok2>/<tok2>/seg-f1-00000.jpg'
+curl -s -o /dev/null -w 'bare %{http_code}\n' "$SRC"                                     # 200
+curl -s -o /dev/null -w 'Origin %{http_code}\n' -H 'Origin: http://localhost:3100' "$SRC" # 403
+curl -s -o /dev/null -w '+ref %{http_code}\n' -H 'Origin: http://localhost:3100' -H 'Referer: https://megavid.buzz/' "$SRC"  # 200
+curl -s -o /dev/null -w 'seg Origin %{http_code}\n' -H 'Origin: http://localhost:3100' "$SEG"  # 403
+curl -s -D - -o /dev/null "$SRC" | grep -i access-control-allow-origin   # https://megavid.buzz
+```
 
-# manga gotchas
-UA='User-Agent: AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)'
-curl -s -H "$UA" 'https://api.mangadex.org/manga/32d76d19-8a05-4db0-9fc2-e0b0648fe9d0/feed?limit=500&translatedLanguage%5B%5D=en&includeFutureUpdates=0'
-curl -s -H "$UA" 'https://api.mangadex.org/at-home/server/f7d2cb75-83b2-426b-bdbd-032870c30abb'   # 200 + empty data[]
+Internal routes:
+
+```bash
+B=http://localhost:3100
+for u in discover?kind=trending discover?kind=airing discover?kind=movies 'discover?kind=search&q=bleach' \
+  'discover?kind=browse&genre=Action&year=2024' anime/21 'anime/episodes?mal=21' 'anime/latest?per_page=2' \
+  'characters?page=1' characters/40 schedule 'manga/search?q=chainsaw&readable=1' \
+  manga/chapter/77fc6e02-a381-411d-ace6-4c00deacadb4 proxy/quotes ; do
+  printf '%-52s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 "$B/api/$u")"
+done
+curl -s "$B/api/anime/source?mal=1535&ep=1&audio=sub" | jq -c '{status,provider,type,source}'
 ```
 
 ## Appendix B — explicitly unverified
 
-* `status: "countdown"` / `iframeUrl` handling — no live instance found; future episodes returned `missing`/404.
-* SRT/ASS conversion path — every live subtitle observed was already `text/vtt`.
-* That a browser `User-Agent` is *required* by aniwatch's WP REST API — plain curl returned `200`.
-* `megavid.buzz` behaviour under a mobile `User-Agent` — only a desktop Chrome UA was probed.
-* Whether `s-90.megavid.se` returns, and whether `sora` ever resolved elsewhere.
-* Real rate limits for aniwatch WP, megavid and MangaDex `/at-home` — no headers exposed.
-* Jikan's quotas — the host was unreachable for the whole check window.
-* Payloads behind the Consumet / Anify / AllAnime / AnimePahe / Anitaku responses in section 7 (redirects were
-  not followed to inspect bodies).
+| Claim | Why |
+| --- | --- |
+| megavid `status: "countdown"` / `iframeUrl` | needs an unaired episode; every fixture returned `ok` or `missing`. Handling exists in `mega.ts` `[code]` |
+| A playable `megaplay.buzz` stream | four sampled embed ids returned `200` with an error HTML body and no `.m3u8`; anikoto timestamps were stale |
+| Jikan rate limits and true latency | host unreachable all session (`000` after 20 s, DNS fine) |
+| anikoto 60 req / 120 s limit | would require deliberately exhausting the limit |
+| aniwatch's hard UA requirement | browser UA *and* empty UA both returned `200` during testing |
+| aniwatch mirror playback (`type: "mp4"`, `provider: "aniwatch"`) | the code path exists `[code]`, but no episode was found that megavid lacked while aniwatch still served, so the signed Google Video URL was never observed |
+| `animex` provider playback (`zuna`/`yuki`/`sora`/`nero`) | their only host, `s-90.megavid.se`, is NXDOMAIN |
+| `/api/proxy/media` on a `206` playlist | no upstream returned 206 for a playlist; only segments did |
+| aniwatch mirror quality/tracks | the fallback returns `tracks: []` and a single quality by design; no episode was found to exercise it |
+| Full production duration of `proxy/media` | `vercel.json` caps it at 30 s while the handler declares 60 s; only local behaviour observed |
+| Whether `hasAvailableChapters=true` excludes *every* licensed title | verified it `200`s and filters, but not sampled across 49 000+ titles |

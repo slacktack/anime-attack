@@ -2,23 +2,47 @@
 
 import Link from "next/link";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Clock, Play, Star } from "lucide-react";
-import {
-  fetchDiscover,
-  fetchLatestEpisodes,
-  fetchAnimeDetail,
-} from "@/lib/client/api";
+import { useEffect, useMemo, useState } from "react";
+import { Play } from "lucide-react";
+import { fetchDiscover, fetchLatestEpisodes, fetchAnimeDetail } from "@/lib/client/api";
 import { getContinueWatching } from "@/lib/storage/store";
 import { PosterCard } from "@/components/ui/PosterCard";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Row } from "@/components/ui/Row";
 import type { AnimeSummary } from "@/lib/anime/types";
+import type { AniwatchEpisode } from "@/lib/anime/aniwatch-types";
 
-function RailSkeletons({ count = 4 }: { count?: number }) {
+function slugify(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function parseEpisode(title: string) {
+  const m = title.match(/^(.*?)\s+Episode\s+(\d+(?:\.\d+)?)\b\s*(.*)$/i);
+  if (!m) return { series: title, episode: null as string | null, dub: /dub/i.test(title) };
+  return { series: m[1], episode: m[2], dub: /dub/i.test(m[3]) };
+}
+
+function PosterSkeletons({ count = 8 }: { count?: number }) {
   return (
-    <div className="aa-rail -mx-3 px-3">
+    <div className="aa-rail aa-gutter py-1">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="skeleton h-[186px] w-[124px] shrink-0 rounded-2xl" />
+        <div key={i} className="aa-poster-w shrink-0">
+          <div className="skeleton aspect-[2/3]" />
+          <div className="skeleton mt-2 h-3 w-3/4 rounded" />
+        </div>
       ))}
     </div>
   );
@@ -28,156 +52,153 @@ function PosterRail({
   title,
   href,
   query,
-  hint,
 }: {
   title: string;
   href?: string;
-  hint?: string;
   query: UseQueryResult<AnimeSummary[]>;
 }) {
   const { data, isLoading } = query;
   if (!isLoading && !data?.length) return null;
-
-  return (
-    <section className="aa-in">
-      <SectionHeader title={title} href={href} hint={hint} />
-      {isLoading ? (
-        <RailSkeletons />
-      ) : (
-        <div className="aa-rail no-scrollbar -mx-3 px-3 pb-1">
-          {data!.map((anime) => (
-            <PosterCard key={anime.id} anime={anime} />
-          ))}
+  if (isLoading) {
+    return (
+      <section>
+        <div className="aa-gutter">
+          <div className="skeleton mb-3 h-5 w-40 rounded" />
         </div>
-      )}
-    </section>
+        <PosterSkeletons />
+      </section>
+    );
+  }
+  return (
+    <Row title={title} href={href}>
+      {data!.map((anime) => (
+        <PosterCard key={anime.id} anime={anime} />
+      ))}
+    </Row>
   );
 }
 
-/** Three-up bento built from the trending list: one feature tile + two compact. */
-function TrendingBento({ items }: { items: AnimeSummary[] }) {
-  if (items.length < 3) return null;
-  const [feature, second, third] = items;
-
+function TopTen({ items }: { items: AnimeSummary[] }) {
+  if (items.length < 5) return null;
   return (
-    <section className="aa-in">
-      <SectionHeader title="Trending now" href="/browse" />
-      <div className="grid grid-cols-2 gap-2">
+    <Row title="Top 10 this week" href="/browse">
+      {items.slice(0, 10).map((anime, i) => (
         <Link
-          href={`/anime/${feature.id}`}
+          key={anime.id}
+          href={`/anime/${anime.id}`}
           prefetch={false}
-          className="aa-tile group relative col-span-1 row-span-2 flex h-[264px] flex-col justify-end p-3"
+          aria-label={`#${i + 1} ${anime.title}`}
+          className="group flex shrink-0 items-end pl-1 pr-3 sm:pr-5"
         >
+          <span
+            aria-hidden
+            className={`aa-rank relative z-0 text-[120px] sm:text-[150px] lg:text-[190px] 2xl:text-[220px] ${
+              i === 9 ? "-mr-[0.06em] tracking-[-0.14em]" : "-mr-[0.1em]"
+            }`}
+          >
+            {i + 1}
+          </span>
+          <span className="poster-frame relative z-10 block aspect-[2/3] w-[96px] ring-1 ring-inset ring-white/[0.06] sm:w-[112px] lg:w-[138px] 2xl:w-[158px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={anime.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+          </span>
+        </Link>
+      ))}
+    </Row>
+  );
+}
+
+function EpisodeCard({ ep, art }: { ep: AniwatchEpisode; art?: AnimeSummary }) {
+  const { series, episode, dub } = parseEpisode(ep.title);
+  const image = art?.banner || art?.cover;
+  return (
+    <Link
+      href={`/watch/${ep.slug}${dub ? "?audio=dub" : ""}`}
+      prefetch={false}
+      className="group block w-[248px] shrink-0 sm:w-[280px] lg:w-[312px]"
+    >
+      <div className="aa-tile on-media aspect-video ring-1 ring-inset ring-white/[0.06]">
+        {image ? (
           <div className="aa-tile-media">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={feature.banner || feature.cover} alt="" />
+            <img src={image} alt="" loading="lazy" />
           </div>
-          <div className="aa-scrim" />
-          <div className="relative">
-            <span className="aa-pill border-amber-300/30 bg-black/45 text-[9.5px] text-amber-200 backdrop-blur">
-              <Star size={9} fill="currentColor" /> {feature.score ?? "—"}
-            </span>
-            <p className="mt-1.5 line-clamp-3 font-display text-[15px] font-bold leading-tight text-white">
-              {feature.title}
-            </p>
-            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-white/45">
-              {[feature.type, feature.year].filter(Boolean).join(" · ")}
-            </p>
-          </div>
-        </Link>
-
-        {[second, third].map((item) => (
-          <Link
-            key={item.id}
-            href={`/anime/${item.id}`}
-            prefetch={false}
-            className="aa-tile group relative flex h-[128px] flex-col justify-end p-2.5"
-          >
-            <div className="aa-tile-media">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.cover} alt="" />
-            </div>
-            <div className="aa-scrim" />
-            <div className="relative">
-              <p className="line-clamp-2 font-display text-[12px] font-bold leading-tight text-white">
-                {item.title}
-              </p>
-              {item.score != null && (
-                <p className="mt-0.5 flex items-center gap-0.5 text-[9.5px] font-black text-amber-300">
-                  <Star size={8} fill="currentColor" /> {item.score}
-                </p>
-              )}
-            </div>
-          </Link>
-        ))}
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_100%_0%,color-mix(in_oklab,var(--accent-purple)_32%,transparent),transparent_60%),var(--ink-700)]" />
+        )}
+        <div className="aa-scrim-soft" />
+        {episode && (
+          <span className="absolute bottom-2 left-3 font-display text-[44px] font-extrabold leading-none tracking-[-0.05em] text-white [font-stretch:75%]">
+            {episode}
+          </span>
+        )}
+        <span className="absolute right-2 top-2 rounded-[5px] bg-black/70 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
+          {dub ? "DUB" : "SUB"}
+        </span>
+        <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-white/95 text-black shadow-xl">
+            <Play size={20} fill="currentColor" className="ml-0.5" />
+          </span>
+        </span>
       </div>
-    </section>
+      <p className="mt-2 line-clamp-1 text-[13.5px] font-semibold text-white/90 group-hover:text-white">{series}</p>
+      <p className="mt-0.5 text-[12px] text-muted">
+        {episode ? `Episode ${episode}` : "New episode"}
+        <span className="mx-1.5 opacity-50">/</span>
+        {timeAgo(ep.date)}
+      </p>
+    </Link>
   );
 }
 
-function LatestEpisodesRow() {
+function LatestEpisodesRow({ library }: { library: AnimeSummary[] }) {
   const { data, isLoading } = useQuery({
     queryKey: ["aniwatch-latest"],
-    queryFn: () => fetchLatestEpisodes(1, 14),
+    queryFn: () => fetchLatestEpisodes(1, 16),
     staleTime: 2 * 60 * 1000,
   });
 
+  const byTitle = useMemo(() => {
+    const map = new Map<string, AnimeSummary>();
+    for (const a of library) map.set(norm(a.title), a);
+    return map;
+  }, [library]);
+
   if (!isLoading && !data?.length) return null;
+  if (isLoading) {
+    return (
+      <section>
+        <div className="aa-gutter">
+          <div className="skeleton mb-3 h-5 w-40 rounded" />
+        </div>
+        <div className="aa-rail aa-gutter py-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="skeleton aspect-video w-[248px] shrink-0 sm:w-[280px] lg:w-[312px]" />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="aa-in">
-      <SectionHeader
-        title="Fresh episodes"
-        hint={isLoading ? undefined : `${data?.length ?? 0}`}
-      />
-      {isLoading ? (
-        <div className="aa-rail -mx-3 px-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="skeleton h-[92px] w-[196px] shrink-0 rounded-2xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="aa-rail no-scrollbar -mx-3 px-3 pb-1">
-          {data!.map((ep) => (
-            <Link
-              key={ep.id}
-              href={`/watch/${ep.slug}`}
-              prefetch={false}
-              className="aa-card aa-card-raise flex w-[196px] shrink-0 items-center gap-2.5 p-2.5"
-            >
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 text-white">
-                <Play size={15} fill="currentColor" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 block font-display text-[11.5px] font-bold leading-tight">
-                  {ep.title}
-                </span>
-                <span className="mt-0.5 flex items-center gap-1 text-[9.5px] font-semibold text-white/40">
-                  <Clock size={9} />
-                  {new Date(ep.date).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </div>
-      )}
-    </section>
+    <Row title="New episodes">
+      {data!.map((ep) => (
+        <EpisodeCard key={ep.id} ep={ep} art={byTitle.get(norm(parseEpisode(ep.title).series))} />
+      ))}
+    </Row>
   );
 }
 
 export function HomeCarousels() {
   const [continueWatching, setContinueWatching] = useState<
-    { anime: AnimeSummary; episode: number }[]
+    { anime: AnimeSummary; episode: number; malId?: number | null }[]
   >([]);
 
   useEffect(() => {
     setContinueWatching(
       getContinueWatching()
-        .slice(0, 12)
-        .map((p) => ({ anime: p.anime, episode: p.episode })),
+        .slice(0, 16)
+        .map((p) => ({ anime: p.anime, episode: p.episode, malId: p.malId })),
     );
   }, []);
 
@@ -185,7 +206,8 @@ export function HomeCarousels() {
   const airing = useQuery({ queryKey: ["airing"], queryFn: () => fetchDiscover("airing") });
   const movies = useQuery({ queryKey: ["movies"], queryFn: () => fetchDiscover("movies") });
 
-  const seed = trending.data?.[1]?.id ?? trending.data?.[0]?.id;
+  const seedAnime = continueWatching[0]?.anime ?? trending.data?.[1] ?? trending.data?.[0];
+  const seed = seedAnime?.id;
   const similar = useQuery({
     queryKey: ["home-similar", seed],
     queryFn: () => fetchAnimeDetail(seed as number).then((d) => d.recommendations),
@@ -193,45 +215,42 @@ export function HomeCarousels() {
     staleTime: 10 * 60 * 1000,
   });
 
+  const library = useMemo(
+    () => [...(airing.data ?? []), ...(trending.data ?? [])],
+    [airing.data, trending.data],
+  );
+
   return (
-    <div className="flex flex-col gap-6 px-3 pt-1">
+    <div className="relative z-10 flex flex-col gap-8 lg:-mt-[clamp(70px,8vw,140px)] lg:gap-11">
       {continueWatching.length > 0 && (
-        <section className="aa-in">
-          <SectionHeader title="Continue watching" href="/library" />
-          <div className="aa-rail no-scrollbar -mx-3 px-3 pb-1">
-            {continueWatching.map(({ anime, episode }) => (
-              <div key={anime.id} className="relative shrink-0">
-                <PosterCard anime={anime} />
-                {episode > 0 && (
-                  <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[9px] font-black text-white backdrop-blur">
-                    EP {episode}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        <Row title="Continue watching" href="/library">
+          {continueWatching.map(({ anime, episode, malId }) => (
+            <PosterCard
+              key={anime.id}
+              anime={anime}
+              badge={episode > 0 ? `EP ${episode}` : undefined}
+              href={
+                malId
+                  ? `/watch/${slugify(anime.title)}-episode-${Math.max(episode, 1)}?mal=${malId}&ep=${Math.max(episode, 1)}&audio=sub`
+                  : `/anime/${anime.id}`
+              }
+            />
+          ))}
+        </Row>
       )}
 
-      {trending.isLoading ? (
-        <section>
-          <SectionHeader title="Trending now" href="/browse" />
-          <div className="grid grid-cols-2 gap-2">
-            <div className="skeleton h-[264px] rounded-[22px]" />
-            <div className="flex flex-col gap-2">
-              <div className="skeleton h-[128px] rounded-[22px]" />
-              <div className="skeleton h-[128px] rounded-[22px]" />
-            </div>
-          </div>
-        </section>
-      ) : (
-        <TrendingBento items={(trending.data ?? []).slice(0, 3)} />
-      )}
-
-      <PosterRail title="Top airing" href="/browse" query={airing} />
-      <LatestEpisodesRow />
+      {trending.isLoading ? <PosterSkeletons /> : <TopTen items={trending.data ?? []} />}
+      <LatestEpisodesRow library={library} />
+      <PosterRail title="Airing this season" href="/browse" query={airing} />
       <PosterRail title="Popular movies" href="/browse" query={movies} />
-      <PosterRail title="Picked for you" href="/browse" query={similar} />
+      {seedAnime && (
+        <PosterRail
+          title={`${continueWatching.length ? "Because you watched" : "More like"} ${
+            seedAnime.title.length > 34 ? `${seedAnime.title.slice(0, 32).trim()}…` : seedAnime.title
+          }`}
+          query={similar}
+        />
+      )}
     </div>
   );
 }

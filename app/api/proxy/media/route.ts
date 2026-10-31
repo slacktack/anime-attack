@@ -4,8 +4,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+// Deliberately the short UA (no "(KHTML, like Gecko) Chrome/…" suffix).
+// Google Video's `videoplayback` endpoint answers 403 to the full Chrome UA string
+// and 206 to this one — measured 4/4 both ways on 2026-10-31 — which would make the
+// aniwatch MP4 fallback from /api/anime/source unplayable. megavid accepts either.
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

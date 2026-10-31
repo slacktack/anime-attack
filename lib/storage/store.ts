@@ -37,10 +37,10 @@ export function toggleFavorite(item: AnimeSummary): boolean {
   list.unshift(item); write("favorites", list); return true;
 }
 
-type Progress = { anime: AnimeSummary; episode: number; at: number };
-export function recordProgress(item: AnimeSummary, episode: number): void {
+type Progress = { anime: AnimeSummary; episode: number; at: number; malId?: number | null };
+export function recordProgress(item: AnimeSummary, episode: number, malId?: number | null): void {
   const list = read<Progress[]>("progress", []).filter((p) => p.anime.id !== item.id);
-  list.push({ anime: item, episode, at: nowMonotonic(list) });
+  list.push({ anime: item, episode, at: nowMonotonic(list), malId: malId ?? null });
   write("progress", list);
 }
 export function getContinueWatching(): Progress[] {

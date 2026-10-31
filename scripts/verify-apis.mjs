@@ -65,6 +65,11 @@ const checks = [
     expect: (d) => d.status === "ok" && d.malId === 21 && d.episode === 650,
   },
   {
+    name: "stream · aniwatch mirror (MP4)",
+    path: "/api/anime/source?slug=one-punch-man-season-3-episode-1-english-subbed&mal=40866&ep=1&audio=sub",
+    expect: (d) => d.status === "ok" && d.type === "mp4" && /googlevideo/.test(d.source ?? ""),
+  },
+  {
     name: "stream · dub",
     path: "/api/anime/source?mal=1535&ep=1&audio=dub",
     expect: (d) => d.status === "ok" || d.status === "missing",
@@ -141,6 +146,33 @@ async function verifyProxyChain() {
 }
 
 await verifyProxyChain();
+
+// The aniwatch mirror serves an MP4 from Google Video: it must survive the proxy
+// with a Range request (the proxy has to send the short UA or Google 403s).
+async function verifyMirrorProxy() {
+  const label = "mirror MP4 proxy (Range 206)";
+  try {
+    const src = await fetchJson(
+      "/api/anime/source?slug=one-punch-man-season-3-episode-1-english-subbed&mal=40866&ep=1&audio=sub",
+    );
+    if (src.type !== "mp4" || !src.source) throw new Error("mirror did not return an mp4 source");
+    const url = `${BASE}/api/proxy/media?url=${encodeURIComponent(src.source)}&ref=${encodeURIComponent(
+      "https://megavid.buzz/",
+    )}&mode=smart`;
+    const res = await fetch(url, { headers: { Range: "bytes=0-8191" } });
+    if (res.status !== 206) throw new Error(`expected 206, got ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < 1024) throw new Error(`too few bytes (${bytes.length})`);
+    const magic = new TextDecoder().decode(bytes.slice(4, 12));
+    if (!magic.includes("ftyp")) throw new Error(`not an MP4 (magic: ${magic})`);
+    console.log(`  PASS  ${label.padEnd(34)}  206   ${bytes.length} bytes, ftyp=${magic}`);
+  } catch (error) {
+    failures += 1;
+    console.log(`  FAIL  ${label.padEnd(34)} ${error.message}`);
+  }
+}
+
+await verifyMirrorProxy();
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

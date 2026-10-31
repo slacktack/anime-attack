@@ -44,7 +44,11 @@ const MEGA_BASE = "https://megavid.buzz";
 const ANIWATCH_BASE = "https://aniwatchtv.by";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
-const PROVIDER_ORDER = ["loli", "zuna", "yuki", "nero"];
+// `?axsv=` is effectively a boolean switch: only "loli" returns a working CDN
+// (cp.megavid.buzz). Every other value - zuna, yuki, nero, sora, mega, nonsense -
+// answers status:"ok" pointing at s-90.megavid.se, which is NXDOMAIN. Keeping the
+// dead ids only added ~3-9s of timeout latency per failure.
+const PROVIDER_ORDER = ["loli"];
 const SOURCE_TTL = 90_000;
 const TARGET_TTL = 10 * 60_000;
 

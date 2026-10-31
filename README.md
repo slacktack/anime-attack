@@ -53,11 +53,15 @@ components/screens/      page-level views (home, detail, watch, browse, …)
 components/manga/        manga browser, detail, reader
 lib/anime/               AniList, Jikan, Kitsu, aniwatch + megavid pipeline
 lib/manga/               MangaDex data layer
+docs/API-CLIENT.md       client contract for UI work (every /api route, shape, error)
 docs/STREAMING-APIS.md   full API research, contracts and APK reuse notes
 ```
 
 ## Documentation
 
+- **Building UI? Read [`docs/API-CLIENT.md`](docs/API-CLIENT.md) first.** It is the contract for the app's own
+  `/api/*` routes — every endpoint, parameter, response shape, cache TTL and error convention, verified against
+  a running build. The UI never calls upstream APIs directly.
 - [`docs/STREAMING-APIS.md`](docs/STREAMING-APIS.md) — every upstream API, tested endpoint contracts,
   provider behaviour, failure modes and how to reuse the pipeline from a mobile client.
 
