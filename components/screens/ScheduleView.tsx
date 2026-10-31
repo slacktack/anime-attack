@@ -1,8 +1,8 @@
 "use client";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Clock } from "lucide-react";
 import { fetchSchedule } from "@/lib/client/api";
 
 function formatCountdown(airingAt: number): string {
@@ -17,66 +17,77 @@ function formatCountdown(airingAt: number): string {
   return `in ${minutes}m`;
 }
 
+function dayLabel(d: Date): string {
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
 export function ScheduleView() {
   const { data, isLoading } = useQuery({ queryKey: ["schedule"], queryFn: fetchSchedule });
 
+  const groups = new Map<string, NonNullable<typeof data>>();
+  for (const entry of data ?? []) {
+    const label = dayLabel(new Date(entry.airingAt * 1000));
+    groups.set(label, [...(groups.get(label) ?? []), entry]);
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <header>
-        <h1 className="flex items-center gap-2 font-display text-[26px] font-bold tracking-tight">
-          <CalendarDays size={21} className="text-accent-blue" />
-          Schedule
-        </h1>
-        <p className="mt-0.5 text-[12.5px] font-semibold text-white/40">
-          Upcoming episodes, soonest first.
-        </p>
-      </header>
+    <div>
+      <PageHeader title="Schedule" subtitle="Episodes airing next, in your local time." />
 
       {isLoading ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton h-[86px] w-full rounded-2xl" />
+        <div className="grid gap-2 lg:grid-cols-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="skeleton h-[84px] w-full" />
           ))}
         </div>
-      ) : data && data.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          {data.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center gap-3 rounded-2xl border border-nb-border bg-white/[0.04] p-2.5"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={entry.cover}
-                alt={entry.title}
-                loading="lazy"
-                className="h-[68px] w-[48px] shrink-0 rounded-xl object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="line-clamp-2 font-display text-[12.5px] font-bold leading-tight">
-                  {entry.title}
-                </p>
-                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] font-semibold">
-                  <span className="rounded-full border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-white/60">
-                    EP {entry.episode}
-                  </span>
-                  <span className="flex items-center gap-0.5 text-accent-gold">
-                    <Clock size={10} /> {formatCountdown(entry.airingAt)}
-                  </span>
-                </p>
-                <p className="mt-0.5 text-[10px] font-medium text-white/30">
-                  {new Date(entry.airingAt * 1000).toLocaleString()}
-                </p>
+      ) : groups.size > 0 ? (
+        <div className="flex flex-col gap-10">
+          {[...groups.entries()].map(([label, entries]) => (
+            <section key={label}>
+              <h2 className="aa-section-title mb-3">
+                {label}
+                <span className="text-[13px] font-medium tracking-normal text-muted">{entries.length}</span>
+              </h2>
+              <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+                {entries.map((entry) => {
+                  const at = new Date(entry.airingAt * 1000);
+                  return (
+                    <div key={entry.id} className="flex items-center gap-4 rounded-lg bg-ink-800 p-2.5 pr-4">
+                      <span className="w-14 shrink-0 text-center font-display text-[17px] font-bold tabular-nums">
+                        {at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                      <span className="poster-frame h-[64px] w-[45px] shrink-0 rounded-md">
+                        {entry.cover && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={entry.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{entry.title}</p>
+                        <p className="mt-0.5 text-[12.5px] text-muted">
+                          Episode {entry.episode}
+                          <span className="mx-1.5 opacity-50">/</span>
+                          <span className="text-accent-gold">{formatCountdown(entry.airingAt)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       ) : (
-        <div className="nb-card p-6 text-center">
-          <p className="font-display text-[14px] font-bold">No upcoming episodes</p>
-          <p className="mt-1 text-[12px] text-white/45">Check back a little later.</p>
-          <Link href="/browse" className="nb-btn nb-btn-accent mx-auto mt-3">
-            Browse instead
+        <div className="py-16 text-center">
+          <p className="font-display text-[20px] font-bold">Nothing scheduled right now</p>
+          <p className="mt-1 text-[14px] text-muted">New airings show up here as they&apos;re announced.</p>
+          <Link href="/browse" className="aa-cta mt-5">
+            Browse the catalogue
           </Link>
         </div>
       )}

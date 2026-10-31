@@ -374,7 +374,7 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="group relative aspect-video w-full overflow-hidden bg-black sm:rounded-2xl"
+      className="group relative aspect-video w-full overflow-hidden bg-black sm:rounded-xl"
       onPointerMove={showControls}
       onPointerLeave={() => {
         if (playing && !menu) setVisible(false);
@@ -387,6 +387,7 @@ export function VideoPlayer({
         preload="metadata"
         className="h-full w-full object-contain"
         onClick={togglePlay}
+        onDoubleClick={() => void toggleFullscreen()}
         onLoadedMetadata={(event) => {
           const video = event.currentTarget;
           setDuration(video.duration || 0);
@@ -463,11 +464,11 @@ export function VideoPlayer({
       )}
 
       <div
-        className={`absolute inset-0 z-30 flex flex-col justify-between transition-opacity duration-200 ${
-          visible || menu ? "opacity-100" : "pointer-events-none opacity-0"
+        className={`pointer-events-none absolute inset-0 z-30 flex flex-col justify-between transition-opacity duration-200 ${
+          visible || menu ? "opacity-100 [&>*]:pointer-events-auto" : "opacity-0"
         }`}
       >
-        <div className="flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent px-3 pb-8 pt-3">
+        <div className="!pointer-events-none flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent px-3 pb-8 pt-3">
           <p className="line-clamp-1 min-w-0 text-xs font-semibold text-white/85">{title}</p>
           <span className="shrink-0 rounded-full border border-white/15 bg-black/45 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-white/80 backdrop-blur">
             {qualityLabel}
@@ -659,8 +660,10 @@ export function VideoPlayer({
                   video.muted = next === 0;
                 }}
                 aria-label="Volume"
-                className="aa-range hidden h-5 w-20 md:block"
-                style={{ background: "transparent" }}
+                className="aa-range hidden h-1 w-20 rounded-full md:block"
+                style={{
+                  background: `linear-gradient(to right, #fff ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.25) ${(muted ? 0 : volume) * 100}%)`,
+                }}
               />
             </div>
 

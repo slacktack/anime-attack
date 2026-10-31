@@ -22,14 +22,20 @@ export function PosterCard({
       className={`group block shrink-0 ${fluid ? "w-full" : "aa-poster-w"}`}
     >
       <div className="poster-frame aspect-[2/3] ring-1 ring-inset ring-white/[0.06]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={anime.cover}
-          alt={anime.title}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover"
-        />
+        {anime.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={anime.cover}
+            alt={anime.title}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="grid h-full w-full place-items-center p-3 text-center font-display text-[15px] font-bold leading-tight text-white/40">
+            {anime.title}
+          </span>
+        )}
         {badge && (
           <span className="on-media absolute left-1.5 top-1.5 rounded-[5px] bg-black/75 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
             {badge}

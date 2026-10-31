@@ -2,6 +2,9 @@ export function htmlToText(html: string | null | undefined): string {
   if (!html) return "";
 
   let text = html
+    .replace(/~!([\s\S]*?)!~/g, "")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<[^>]+>/g, "");

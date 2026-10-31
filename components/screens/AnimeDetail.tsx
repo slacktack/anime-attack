@@ -13,8 +13,9 @@ import { ProgressControl } from "@/components/ui/ProgressControl";
 import { AiPanel } from "@/components/screens/AiPanel";
 import { getSpoilerCeiling } from "@/lib/storage/store";
 import { EpisodeList } from "@/components/screens/EpisodeList";
-import { SeasonSwitcher } from "@/components/screens/SeasonSwitcher";
+import { FranchiseExtras, SeasonSwitcher } from "@/components/screens/SeasonSwitcher";
 import { Countdown } from "@/components/ui/Countdown";
+import { HeroArt } from "@/components/ui/HeroArt";
 
 function slugify(input: string): string {
   return input
@@ -147,21 +148,17 @@ export function AnimeDetail({ id }: { id: number }) {
     <div className="pb-16">
       {/* billboard */}
       <section className="on-media relative h-[64svh] min-h-[480px] w-full overflow-hidden bg-black lg:h-[min(80vh,46vw)] lg:min-h-[560px]">
-        <picture className="absolute inset-0">
-          <source media="(min-width: 1024px)" srcSet={banner} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={anime.cover} alt="" className="aa-xfade h-full w-full object-cover object-[50%_22%]" />
-        </picture>
+        <HeroArt backdrop={detail.data?.backdrop} banner={banner} cover={anime.cover} eager />
         <div className="absolute inset-0 hidden bg-[linear-gradient(77deg,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.6)_32%,transparent_66%)] lg:block" />
         <div className="absolute inset-x-0 bottom-0 h-[70%] bg-[linear-gradient(to_top,var(--ink-solid)_0%,color-mix(in_oklab,var(--ink-solid)_80%,transparent)_32%,transparent_100%)] lg:h-[45%]" />
 
-        <div className="aa-gutter absolute inset-x-0 bottom-0 pb-7 lg:pb-14">
+        <div className="aa-gutter absolute inset-0 flex flex-col justify-end overflow-hidden pb-7 pt-[calc(var(--header-h)+env(safe-area-inset-top)+20px)] lg:pb-14">
           <div className="flex max-w-[720px] flex-col">
             <h1
               className={`aa-billboard-title line-clamp-3 text-white drop-shadow-[0_4px_30px_rgba(0,0,0,0.5)] ${
                 anime.title.length > 44
-                  ? "text-[34px] sm:text-[46px] lg:text-[clamp(46px,4vw,68px)]"
-                  : "text-[44px] sm:text-[58px] lg:text-[clamp(60px,5.6vw,104px)]"
+                  ? "text-[32px] sm:text-[44px] lg:text-[clamp(40px,min(3.8vw,6.5vh),64px)]"
+                  : "text-[42px] sm:text-[56px] lg:text-[clamp(52px,min(5.4vw,10vh),100px)]"
               }`}
             >
               {anime.title}
@@ -220,6 +217,10 @@ export function AnimeDetail({ id }: { id: number }) {
         </div>
       </section>
 
+      <div className="relative z-10 -mt-2 lg:-mt-6">
+        <SeasonSwitcher id={id} />
+      </div>
+
       {/* tabs */}
       <div className="sticky top-[calc(var(--header-h)+env(safe-area-inset-top))] z-30 border-b border-[var(--glass-border)] bg-ink-solid/95 backdrop-blur-xl [-webkit-backdrop-filter:blur(24px)]">
         <div role="tablist" className="aa-gutter no-scrollbar flex gap-6 overflow-x-auto lg:gap-9">
@@ -244,7 +245,6 @@ export function AnimeDetail({ id }: { id: number }) {
       <div className="aa-gutter pt-6 lg:pt-8">
         {tab === "episodes" && (
           <section id="episodes" className="flex flex-col gap-4">
-            <SeasonSwitcher id={id} title={anime.title} year={anime.seasonYear} type={anime.type} />
             <EpisodeList
               malId={malId}
               animeTitle={anime.title}
@@ -347,6 +347,12 @@ export function AnimeDetail({ id }: { id: number }) {
           </div>
         )}
       </div>
+
+      {(tab === "episodes" || tab === "more") && (
+        <div className="mt-12">
+          <FranchiseExtras id={id} />
+        </div>
+      )}
     </div>
   );
 }

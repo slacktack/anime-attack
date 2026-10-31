@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/ui/BottomNav";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
 import { AppHeader } from "@/components/ui/AppHeader";
+import { WarmLinks } from "@/components/ui/WarmLinks";
 
 const display = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PageTransition>{children}</PageTransition>
           </Providers>
           <BottomNav />
+          <WarmLinks />
         </ThemeProvider>
       </body>
     </html>

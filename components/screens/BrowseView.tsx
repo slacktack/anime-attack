@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -30,11 +31,7 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`shrink-0 whitespace-nowrap rounded-xl border px-3 py-1.5 text-[12px] font-bold transition-all active:scale-95 ${
-        active
-          ? "border-transparent bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white shadow-[0_10px_24px_-14px_rgba(139,92,246,0.9)]"
-          : "border-white/12 bg-white/[0.05] text-white/60 hover:bg-white/[0.09]"
-      }`}
+      className="aa-pill shrink-0 capitalize"
     >
       {children}
     </button>
@@ -43,7 +40,7 @@ function Chip({
 
 function GridSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+    <div className="aa-grid">
       {Array.from({ length: 12 }).map((_, i) => (
         <div key={i} className="skeleton aspect-[2/3] w-full" />
       ))}
@@ -85,18 +82,10 @@ export function BrowseView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header>
-        <h1 className="flex items-center gap-2 font-display text-[26px] font-bold tracking-tight">
-          <Compass size={22} className="text-accent-purple" />
-          Browse
-        </h1>
-        <p className="mt-0.5 text-[12.5px] font-semibold text-white/40">
-          Filter the whole catalogue by genre, year, format and status.
-        </p>
-      </header>
+      <PageHeader title="Browse" subtitle="Filter the whole catalogue by genre, year, format and status." />
 
-      <section className="nb-card flex flex-col gap-2.5 p-3">
-        <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+      <section className="flex flex-col gap-3">
+        <div className="no-scrollbar -mx-[var(--gutter)] flex gap-2 overflow-x-auto px-[var(--gutter)] lg:mx-0 lg:flex-wrap lg:px-0">
           <Chip active={genre === undefined} onClick={() => setGenre(undefined)}>
             All genres
           </Chip>
@@ -107,7 +96,7 @@ export function BrowseView() {
           ))}
         </div>
 
-        <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
+        <div className="no-scrollbar -mx-[var(--gutter)] flex gap-2 overflow-x-auto px-[var(--gutter)] lg:mx-0 lg:flex-wrap lg:px-0">
           {FORMATS.map((f) => (
             <Chip key={f} active={format === f} onClick={() => setFormat(format === f ? undefined : f)}>
               {f}
@@ -124,7 +113,7 @@ export function BrowseView() {
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 sm:max-w-xl">
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
@@ -157,7 +146,7 @@ export function BrowseView() {
               type="button"
               onClick={reset}
               aria-label="Reset filters"
-              className="grid w-[46px] shrink-0 place-items-center rounded-xl border border-white/12 bg-white/[0.06] text-white/70"
+              className="grid w-[46px] shrink-0 place-items-center rounded-[10px] border border-white/12 text-white/70 hover:text-white"
             >
               <RotateCcw size={16} />
             </button>
@@ -166,7 +155,7 @@ export function BrowseView() {
       </section>
 
       <div className="flex items-center justify-between">
-        <p className="text-[11.5px] font-semibold text-white/40">
+        <p className="text-[13px] text-muted">
           {isFetching ? "Loading…" : `${data?.length ?? 0} titles`}
         </p>
       </div>
@@ -174,14 +163,14 @@ export function BrowseView() {
       {isFetching && !data ? (
         <GridSkeleton />
       ) : data && data.length > 0 ? (
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+        <div className="aa-grid">
           {data.map((a) => (
-            <PosterCard key={a.id} anime={a} />
+            <PosterCard key={a.id} anime={a} fluid />
           ))}
         </div>
       ) : (
-        <div className="nb-card p-6 text-center">
-          <p className="font-display text-[14px] font-bold">Nothing matches those filters</p>
+        <div className="py-16 text-center">
+          <p className="font-display text-[20px] font-bold">Nothing matches those filters</p>
           <button type="button" onClick={reset} className="nb-btn mx-auto mt-3">
             <RotateCcw size={14} /> Reset filters
           </button>

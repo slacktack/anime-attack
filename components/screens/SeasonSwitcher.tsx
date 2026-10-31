@@ -1,128 +1,147 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { getRelations } from "@/lib/anime/anilist";
-import type { RelatedAnime } from "@/lib/anime/types";
+import { ChevronDown } from "lucide-react";
+import { fetchSeasons, type SeasonEntry } from "@/lib/client/api";
+import { Row } from "@/components/ui/Row";
 
-type Family = {
-  /** Chronological season number for TV/ONA entries (1-based), null for extras. */
-  seasonNumber: number | null;
-  item: RelatedAnime | null; // null = the title currently being viewed
+const FORMAT_LABEL: Record<string, string> = {
+  MOVIE: "Movie",
+  OVA: "OVA",
+  ONA: "ONA",
+  SPECIAL: "Special",
+  TV_SHORT: "Shorts",
 };
 
-function isSeasonEntry(item: RelatedAnime): boolean {
-  return item.type === "TV" || item.type === "ONA";
+export function useSeasons(id: number | null | undefined) {
+  return useQuery({
+    queryKey: ["seasons", id],
+    queryFn: () => fetchSeasons(id as number),
+    enabled: id != null,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  });
 }
 
-function label(entry: Family, currentTitle: string): string {
-  if (!entry.item) {
-    const match = currentTitle.match(/\b(?:season|part|cour)\s*(\d+)\b/i);
-    if (match) return `S${match[1]}`;
-    const ordinal = currentTitle.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b/i);
-    if (ordinal) return `S${ordinal[1]}`;
-    return entry.seasonNumber ? `S${entry.seasonNumber}` : "Now";
-  }
-
-  const { item } = entry;
-  if (isSeasonEntry(item)) {
-    if (entry.seasonNumber) return `S${entry.seasonNumber}`;
-    const match = item.title.match(/\b(?:season|part|cour)\s*(\d+)\b/i);
-    return match ? `S${match[1]}` : "Season";
-  }
-  if (item.type === "MOVIE") return "Movie";
-  if (item.type === "OVA") return "OVA";
-  if (item.type === "SPECIAL") return "Special";
-  return "More";
+function sub(entry: SeasonEntry): string {
+  const eps = entry.episodes ? `${entry.episodes} episodes` : entry.status === "NOT_YET_RELEASED" ? "Upcoming" : null;
+  return [entry.year, eps].filter(Boolean).join(", ");
 }
 
-function TabsSkeleton() {
-  return (
-    <div className="flex gap-1.5">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="skeleton h-8 w-12 rounded-xl" />
-      ))}
-    </div>
+function SeasonCard({ entry: raw, markCurrent = true }: { entry: SeasonEntry; markCurrent?: boolean }) {
+  const entry = markCurrent ? raw : { ...raw, current: false };
+  const body = (
+    <>
+      <span className="poster-frame block h-[64px] w-[45px] shrink-0 rounded-md">
+        {entry.cover && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={entry.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+        )}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[15px] font-bold leading-tight">Season {entry.season}</span>
+        <span className={`mt-0.5 block text-[12.5px] ${entry.current ? "text-black/60" : "text-muted"}`}>{sub(entry)}</span>
+      </span>
+    </>
+  );
+  const cls = `flex w-[188px] shrink-0 items-center gap-3 rounded-lg p-2 pr-3 transition-colors ${
+    entry.current ? "bg-white text-black" : "bg-ink-800 hover:bg-ink-700"
+  }`;
+  return entry.current ? (
+    <span aria-current="page" title={entry.title} className={cls}>
+      {body}
+    </span>
+  ) : (
+    <Link href={`/anime/${entry.id}`} title={entry.title} className={cls}>
+      {body}
+    </Link>
   );
 }
 
-/**
- * Season tabs: TV/ONA entries numbered chronologically (S1 → SN), extras
- * (movies, OVAs, specials) grouped after them. Every tab is a link to that
- * entry's page, which is where its own episode grid lives.
- */
-export function SeasonSwitcher({
-  id,
-  title,
-  year,
-  type,
-}: {
-  id: number;
-  title: string;
-  year?: number | null;
-  type?: string | null;
-}) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["relations", id],
-    queryFn: () => getRelations(id),
-    staleTime: 10 * 60 * 1000,
-    retry: 1,
-  });
-
-  if (isLoading) return <TabsSkeleton />;
-  if (isError || !data || data.length === 0) return null;
-
-  const currentIsSeason = type === "TV" || type === "ONA" || type === "SPECIAL" || type == null;
-
-  const seasons: { year: number; item: RelatedAnime | null }[] = data
-    .filter(isSeasonEntry)
-    .map((item) => ({ year: item.year ?? 9999, item }));
-  if (currentIsSeason) seasons.push({ year: year ?? 8888, item: null });
-  seasons.sort((a, b) => a.year - b.year || (a.item?.id ?? 0) - (b.item?.id ?? 0));
-
-  const families: Family[] = [
-    ...seasons.map((entry, index) => ({
-      seasonNumber: index + 1,
-      item: entry.item,
-    })),
-    ...data
-      .filter((item) => !isSeasonEntry(item))
-      .map((item) => ({ seasonNumber: null, item })),
-  ];
-
+// Big season row for detail pages; hidden for single-season shows.
+export function SeasonSwitcher({ id, heading, markCurrent = true }: { id: number; heading?: string; markCurrent?: boolean }) {
+  const { data, isLoading } = useSeasons(id);
+  if (isLoading) {
+    return (
+      <div className="flex gap-2 overflow-hidden">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="skeleton h-[80px] w-[188px] shrink-0 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+  const seasons = data?.seasons ?? [];
+  if (seasons.length <= 1) return null;
   return (
-    <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-      {families.map((entry) => {
-        const text = label(entry, title);
-        const key = entry.item ? `${entry.item.relationType}-${entry.item.id}` : `current-${id}`;
-        const fullTitle = entry.item?.title ?? title;
+    <Row title={heading ?? `${seasons.length} seasons`}>
+      {seasons.map((s) => (
+        <SeasonCard key={s.id} entry={s} markCurrent={markCurrent} />
+      ))}
+    </Row>
+  );
+}
 
-        if (!entry.item) {
-          return (
-            <span
-              key={key}
-              aria-current="page"
-              title={fullTitle}
-              className="aa-pill shrink-0"
-              data-active="true"
-            >
-              {text}
+// Compact picker for tight spaces (watch sidebar).
+export function SeasonSelect({ id }: { id: number }) {
+  const router = useRouter();
+  const { data } = useSeasons(id);
+  const options = [...(data?.seasons ?? []), ...(data?.extras ?? [])];
+  if (options.length <= 1) return null;
+  const current = options.find((o) => o.current);
+  return (
+    <label className="relative block">
+      <span className="sr-only">Season</span>
+      <select
+        value={current?.id ?? ""}
+        onChange={(e) => router.push(`/anime/${e.target.value}`)}
+        className="nb-input appearance-none !bg-none pr-10 font-semibold"
+        style={{ minHeight: 44 }}
+      >
+        {!current && <option value="">Choose a season</option>}
+        {(data?.seasons ?? []).map((s) => (
+          <option key={s.id} value={s.id}>
+            Season {s.season} {s.year ? `(${s.year})` : ""}
+          </option>
+        ))}
+        {(data?.extras ?? []).length > 0 && (
+          <optgroup label="Movies & specials">
+            {data!.extras.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.title}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      <ChevronDown size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60" />
+    </label>
+  );
+}
+
+// Movies, OVAs and specials as titled posters.
+export function FranchiseExtras({ id, title = "Movies & specials" }: { id: number; title?: string }) {
+  const { data } = useSeasons(id);
+  const extras = data?.extras ?? [];
+  if (!extras.length) return null;
+  return (
+    <Row title={title}>
+      {extras.map((e) => (
+        <Link key={e.id} href={`/anime/${e.id}`} className="group block aa-poster-w shrink-0">
+          <div className="poster-frame aspect-[2/3] ring-1 ring-inset ring-white/[0.06]">
+            {e.cover && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={e.cover} alt={e.title} loading="lazy" className="h-full w-full object-cover" />
+            )}
+            <span className="on-media absolute left-1.5 top-1.5 rounded-[5px] bg-black/75 px-1.5 py-0.5 text-[10.5px] font-bold text-white">
+              {FORMAT_LABEL[e.format ?? ""] ?? "Extra"}
             </span>
-          );
-        }
-
-        return (
-          <Link
-            key={key}
-            href={`/anime/${entry.item.id}`}
-            prefetch={false}
-            title={fullTitle}
-            className="aa-pill shrink-0 hover:text-white"
-          >
-            {text}
-          </Link>
-        );
-      })}
-    </div>
+          </div>
+          <p className="mt-2 line-clamp-2 text-[13px] font-semibold leading-snug text-white/90 group-hover:text-white">{e.title}</p>
+          {e.year && <p className="mt-0.5 text-[12px] text-muted">{e.year}</p>}
+        </Link>
+      ))}
+    </Row>
   );
 }

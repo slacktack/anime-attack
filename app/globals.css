@@ -201,6 +201,7 @@ img { -webkit-user-drag: none; }
   ::-webkit-scrollbar { display: none; }
 }
 
+@layer components {
 /* ── Typography ── */
 .font-display {
   font-family: var(--font-display), ui-sans-serif, system-ui;
@@ -420,19 +421,6 @@ select.nb-input {
   50% { opacity: 0.85; }
 }
 .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
-
-/* ── Light themes: legacy white utilities ── */
-:where([data-theme="sakura"], [data-theme="paper"]) .text-white { color: var(--foreground); }
-:where([data-theme="sakura"], [data-theme="paper"]) [class*="text-white/"] {
-  color: color-mix(in oklab, var(--foreground) 66%, transparent);
-}
-:where([data-theme="sakura"], [data-theme="paper"]) [class*="bg-white/"] { background: var(--glass-strong); }
-:where([data-theme="sakura"], [data-theme="paper"]) [class*="border-white/"] { border-color: var(--glass-border-bright); }
-:where([data-theme="sakura"], [data-theme="paper"]) .nb-btn-accent .text-white { color: #fff; }
-/* Media overlays stay light-on-dark in every theme */
-:where([data-theme="sakura"], [data-theme="paper"]) .on-media,
-:where([data-theme="sakura"], [data-theme="paper"]) .on-media .text-white { color: #fff; }
-:where([data-theme="sakura"], [data-theme="paper"]) .on-media [class*="text-white/"] { color: rgba(255, 255, 255, 0.72); }
 
 /* ── Range (player) ── */
 input[type="range"].aa-range {
@@ -705,3 +693,29 @@ input[type="range"].aa-range::-moz-range-thumb { height: 14px; width: 14px; bord
   .aa-in, @keyframes aa-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .aa-xfade { animation: none; }
 }
+
+/* Responsive poster grid */
+.aa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 22px 10px;
+}
+@media (min-width: 640px) { .aa-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 26px 12px; } }
+@media (min-width: 1280px) { .aa-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 30px 14px; } }
+
+}
+
+/* ── Light themes: legacy white utilities ── */
+:where([data-theme="sakura"], [data-theme="paper"]) .text-white { color: var(--foreground); }
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="text-white/"] {
+  color: color-mix(in oklab, var(--foreground) 66%, transparent);
+}
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="bg-white/"] { background: var(--glass-strong); }
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="border-white/"] { border-color: var(--glass-border-bright); }
+:where([data-theme="sakura"], [data-theme="paper"]) .nb-btn-accent .text-white { color: #fff; }
+/* Media overlays stay light-on-dark in every theme */
+:where([data-theme="sakura"], [data-theme="paper"]) .on-media,
+:where([data-theme="sakura"], [data-theme="paper"]) .on-media .text-white { color: #fff; }
+:where([data-theme="sakura"], [data-theme="paper"]) .on-media [class*="text-white/"] { color: rgba(255, 255, 255, 0.72); }
+
+:where([data-theme="sakura"], [data-theme="paper"]) .aa-rank { text-shadow: none; }

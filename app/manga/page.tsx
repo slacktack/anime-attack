@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function MangaPage() {
   return (
-    <main className="px-4 pt-3">
+    <main className="aa-gutter pb-12 pt-4 lg:pt-8">
       <MangaBrowser />
     </main>
   );

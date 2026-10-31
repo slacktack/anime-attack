@@ -21,7 +21,7 @@ function sectionLabel(path: string): string {
 
 // Pages whose first element is full-bleed media the header can float over.
 function overlaysMedia(path: string): boolean {
-  return path === "/" || path.startsWith("/anime/");
+  return path === "/" || path.startsWith("/anime/") || path.startsWith("/manga/");
 }
 
 function Wordmark() {
@@ -114,7 +114,7 @@ export function AppHeader() {
           <Link
             href="/search"
             aria-label="Search"
-            className="grid h-11 w-11 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+            className="grid h-11 w-11 place-items-center rounded-full text-white/85 transition-colors hover:bg-[color:var(--glass-strong)] hover:text-white"
           >
             <Search size={21} />
           </Link>

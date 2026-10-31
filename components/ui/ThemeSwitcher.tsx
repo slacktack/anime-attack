@@ -32,7 +32,7 @@ export function ThemeSwitcher() {
         aria-label="Change theme"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="grid h-11 w-11 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+        className="grid h-11 w-11 place-items-center rounded-full text-white/85 transition-colors hover:bg-[color:var(--glass-strong)] hover:text-white"
       >
         <Palette size={20} />
       </button>

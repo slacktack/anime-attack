@@ -42,7 +42,7 @@ export default async function WatchPage({
   const initialAudio = query.audio === "dub" || query.audio === "sub" ? query.audio : undefined;
 
   return (
-    <main className="px-4 pt-5 sm:pt-8">
+    <main className="aa-gutter pb-12 pt-0 sm:pt-5 lg:pt-6">
       <WatchView slug={slug} malId={malId} episode={episode} initialAudio={initialAudio} />
     </main>
   );
