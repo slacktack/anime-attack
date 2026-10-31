@@ -76,3 +76,4 @@ upstream providers. See the caveats section of the API document.
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
 | `npx vitest run` | Unit tests |
+| `npm run verify:apis` | Verify every internal API endpoint against a running server |

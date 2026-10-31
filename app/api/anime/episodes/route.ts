@@ -47,6 +47,7 @@ async function anilistByMal(malId: number): Promise<Rec | null> {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ query: QUERY, variables: { idMal: malId } }),
+      signal: AbortSignal.timeout(8000),
       next: { revalidate: 3600 },
     } as RequestInit);
     if (!res.ok) return null;
@@ -57,13 +58,26 @@ async function anilistByMal(malId: number): Promise<Rec | null> {
   }
 }
 
+// Jikan stalls often; remember that it just failed so we do not pay the timeout
+// on every request for the same anime.
+const jikanCooldown = new Map<number, number>();
+const JIKAN_COOLDOWN_MS = 5 * 60_000;
+
 async function jikanEpisodes(malId: number): Promise<WatchEpisode[]> {
+  const until = jikanCooldown.get(malId);
+  if (until && until > Date.now()) return [];
   try {
     const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/episodes`, {
       headers: { Accept: "application/json" },
+      // Jikan regularly stalls for 10s+; a slow list is worse than a generated one,
+      // so give up quickly and fall back to numbering from the AniList count.
+      signal: AbortSignal.timeout(4000),
       next: { revalidate: 3600 },
     } as RequestInit);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      jikanCooldown.set(malId, Date.now() + JIKAN_COOLDOWN_MS);
+      return [];
+    }
     const json = (await res.json()) as { data?: Rec[] };
     return (json.data ?? []).map((e, i) => ({
       number: typeof e?.mal_id === "number" ? e.mal_id : i + 1,
@@ -71,6 +85,7 @@ async function jikanEpisodes(malId: number): Promise<WatchEpisode[]> {
       filler: Boolean(e?.filler),
     }));
   } catch {
+    jikanCooldown.set(malId, Date.now() + JIKAN_COOLDOWN_MS);
     return [];
   }
 }
