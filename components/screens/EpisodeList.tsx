@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Play, Search } from "lucide-react";
+import { ArrowRight, CalendarClock, Play, Search, X } from "lucide-react";
 import { getEpisodesByMal } from "@/lib/anime/jikan";
 import { fetchEpisodesByCategory } from "@/lib/anime/aniwatch";
 import type { AniwatchEpisode } from "@/lib/anime/aniwatch-types";
 import { useDebounce } from "@/lib/ui/useDebounce";
 import { Countdown } from "@/components/ui/Countdown";
 
-const RANGE_SIZE = 100;
+const PAGE_SIZE = 60;
 
 type EpisodeListProps = {
   malId: number | null;
@@ -20,9 +21,10 @@ type EpisodeListProps = {
   aniwatchCategoryName?: string;
   animeStatus?: string | null;
   nextAiring?: { episode: number; airingAt: number } | null;
-  /** Where "just play episode 1" should go when no list exists. */
   fallbackHref?: string;
   isMovie?: boolean;
+  /** Highest episode the user has watched (spoiler ceiling) for the "you are here" mark. */
+  resumeEpisode?: number;
 };
 
 function slugify(input: string): string {
@@ -69,11 +71,11 @@ function audioFromAniwatch(ep: AniwatchEpisode): "sub" | "dub" {
   return /dub(bed)?/i.test(`${ep.slug} ${ep.title}`) ? "dub" : "sub";
 }
 
-function RowSkeleton() {
+function GridSkeleton({ count = 24 }: { count?: number }) {
   return (
-    <div className="flex flex-col gap-2">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="skeleton h-[54px] w-full rounded-xl" />
+    <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="skeleton aspect-square rounded-xl" />
       ))}
     </div>
   );
@@ -89,10 +91,14 @@ export function EpisodeList({
   nextAiring,
   fallbackHref,
   isMovie,
+  resumeEpisode = 0,
 }: EpisodeListProps) {
-  const [rangeStart, setRangeStart] = useState(0);
+  const [page, setPage] = useState(0);
   const [term, setTerm] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [jump, setJump] = useState("");
   const debouncedTerm = useDebounce(term, 200);
+  const router = useRouter();
 
   const jikan = useQuery({
     queryKey: ["episodes", malId],
@@ -120,30 +126,27 @@ export function EpisodeList({
   }, [jikan.data, totalEpisodes]);
 
   const aniwatchEpisodes = useMemo(() => aniwatch.data ?? [], [aniwatch.data]);
+  const query = debouncedTerm.trim().toLowerCase();
 
-  const ranges = useMemo(() => {
-    if (episodes.length <= RANGE_SIZE) return [];
+  const chunks = useMemo(() => {
+    if (episodes.length <= PAGE_SIZE) return [];
     const result: { start: number; end: number }[] = [];
-    for (let i = 0; i < episodes.length; i += RANGE_SIZE) {
-      result.push({ start: i, end: Math.min(i + RANGE_SIZE, episodes.length) });
+    for (let i = 0; i < episodes.length; i += PAGE_SIZE) {
+      result.push({ start: i, end: Math.min(i + PAGE_SIZE, episodes.length) });
     }
     return result;
   }, [episodes.length]);
 
-  const rangedEpisodes = useMemo(() => {
-    if (ranges.length === 0) return episodes;
-    const active = ranges[rangeStart] ?? ranges[0];
-    return episodes.slice(active.start, active.end);
-  }, [episodes, ranges, rangeStart]);
-
-  const query = debouncedTerm.trim().toLowerCase();
-
-  const filteredEpisodes = useMemo(() => {
-    if (!query) return rangedEpisodes;
-    return rangedEpisodes.filter(
+  const visible = useMemo(() => {
+    if (!query) {
+      if (chunks.length === 0) return episodes;
+      const active = chunks[page] ?? chunks[0];
+      return episodes.slice(active.start, active.end);
+    }
+    return episodes.filter(
       (ep) => String(ep.number).includes(query) || (ep.title ?? "").toLowerCase().includes(query),
     );
-  }, [rangedEpisodes, query]);
+  }, [episodes, chunks, page, query]);
 
   const filteredAniwatch = useMemo(() => {
     if (!query) return aniwatchEpisodes;
@@ -161,7 +164,6 @@ export function EpisodeList({
   const notAired = animeStatus === "NOT_YET_RELEASED";
   const baseSlug = slugify(animeTitle);
 
-  /* ── Nothing anywhere: never render an empty box ───────────── */
   if (nothingAtAll && !busy) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center">
@@ -175,9 +177,9 @@ export function EpisodeList({
           {notAired
             ? nextAiring
               ? `Episode ${nextAiring.episode} airs `
-              : "Episodes will appear here as soon as they air."
-            : "The episode source is empty right now, but playback is still worth a try."}
-          {notAired && nextAiring && <Countdown airingAt={nextAiring.airingAt} />}
+              : "Episodes appear here as soon as they air."
+            : "The source list is empty right now, but playback is still worth a try."}
+          {notAiring(nextAiring, notAired)}
         </p>
         {fallbackHref && (
           <Link
@@ -193,177 +195,186 @@ export function EpisodeList({
     );
   }
 
+  if (busy && episodes.length === 0) return <GridSkeleton />;
+
+  /* ── Single-entry titles (movies, one-shots) ───────────────── */
+  if (isMovie && !query) {
+    return (
+      <Link
+        href={watchHref({ slug: `${baseSlug}-episode-1`, malId, episode: 1 })}
+        prefetch={false}
+        className="flex items-center gap-3 rounded-2xl border border-white/12 bg-white/[0.05] p-3 transition-colors hover:bg-white/[0.09]"
+      >
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white">
+          <Play size={18} fill="currentColor" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[14px] font-bold">Play the movie</span>
+          <span className="block text-[11.5px] font-semibold text-white/40">
+            Full feature · sub and dub
+          </span>
+        </span>
+      </Link>
+    );
+  }
+
   return (
-    <div>
-      {hasJikan && (
-        <>
-          {ranges.length > 0 && (
-            <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
-              {ranges.map((range, i) => (
-                <button
-                  key={range.start}
-                  type="button"
-                  onClick={() => setRangeStart(i)}
-                  className={`shrink-0 rounded-xl border px-3 py-1.5 text-[11.5px] font-bold transition-colors ${
-                    i === rangeStart
-                      ? "border-transparent bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white"
-                      : "border-white/12 bg-white/[0.05] text-white/60 hover:bg-white/[0.09]"
-                  }`}
-                >
-                  {range.start + 1}–{range.end}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <label className="relative mb-3 block">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/35"
-            />
-            <input
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              placeholder={isMovie ? "Find the movie…" : "Find episode number or title…"}
-              inputMode="search"
-              className="nb-input pl-10"
-              style={{ minHeight: 46 }}
-            />
-          </label>
-
-          {busy && <RowSkeleton />}
-
-          {!busy && filteredEpisodes.length === 0 && (
-            <p className="py-5 text-center text-[12.5px] font-semibold text-white/45">
-              {query ? "No episode matches that search." : "No episodes found."}
-            </p>
-          )}
-
-          {!busy && filteredEpisodes.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {filteredEpisodes.map((ep) => {
-                const row = (
-                  <div className="flex min-h-[54px] items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:border-white/20 hover:bg-white/[0.08]">
-                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                      <span className="grid h-9 w-12 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.06] text-[11px] font-black text-accent-purple">
-                        {isMovie ? "MOV" : `EP ${ep.number}`}
-                      </span>
-                      <span className="line-clamp-1 min-w-0 flex-1 text-[13px] font-semibold text-white/85">
-                        {ep.title ?? (isMovie ? "Full movie" : `Episode ${ep.number}`)}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {ep.filler && (
-                        <span className="hidden rounded-full border border-amber-300/25 bg-amber-300/12 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-300 sm:inline">
-                          Filler
-                        </span>
-                      )}
-                      <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white shadow-[0_10px_22px_-12px_rgba(139,92,246,0.95)]">
-                        <Play size={13} fill="currentColor" />
-                      </span>
-                    </div>
-                  </div>
-                );
-
-                return ep.number > 0 ? (
-                  <Link
-                    key={`jikan-${ep.number}`}
-                    href={watchHref({
-                      slug: `${baseSlug}-episode-${ep.number}`,
-                      malId,
-                      episode: ep.number,
-                    })}
-                    className="block"
-                    prefetch={false}
-                  >
-                    {row}
-                  </Link>
-                ) : (
-                  <div key={`jikan-${ep.number}`}>{row}</div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {hasAniwatch && (
-        <>
-          {hasJikan && (
-            <div className="my-4 flex items-center gap-3">
-              <div className="h-px flex-1 bg-white/12" />
-              <span className="text-[10px] font-black uppercase tracking-[0.12em] text-white/35">
-                {aniwatchCategoryName ? `Latest from ${aniwatchCategoryName}` : "Latest from source"}
-              </span>
-              <div className="h-px flex-1 bg-white/12" />
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2">
-            {(aniwatch.isLoading || aniwatch.isFetching) && filteredAniwatch.length === 0 ? (
-              <RowSkeleton />
-            ) : filteredAniwatch.length === 0 ? (
-              <p className="py-5 text-center text-[12.5px] font-semibold text-white/40">
-                No source episodes found right now.
-              </p>
-            ) : (
-              filteredAniwatch.map((ep) => {
-                const number = episodeNumberFromAniwatch(ep);
-                const audio = audioFromAniwatch(ep);
-                return (
-                  <Link
-                    key={ep.id}
-                    href={watchHref({
-                      slug: ep.slug,
-                      malId,
-                      episode: number ?? undefined,
-                      audio,
-                    })}
-                    className="flex min-h-[54px] items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:border-white/20 hover:bg-white/[0.08]"
-                    prefetch={false}
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                      <span className="grid h-9 w-12 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.06] text-[11px] font-black text-accent-blue">
-                        {number ? `EP ${number}` : "NEW"}
-                      </span>
-                      <span className="line-clamp-1 min-w-0 flex-1 text-[13px] font-semibold text-white/85">
-                        {cleanAniwatchTitle(ep.title)}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span className="rounded-full border border-sky-300/25 bg-sky-400/12 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-sky-300">
-                        {audio}
-                      </span>
-                      <span className="grid h-9 w-9 place-items-center rounded-full bg-white/12 text-white">
-                        <Play size={13} fill="currentColor" />
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })
-            )}
-          </div>
-        </>
-      )}
-
-      {!hasJikan && !hasAniwatch && (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center">
-          <p className="font-display text-[14px] font-bold">No episode data for this title</p>
-          <p className="mt-1 text-[12px] text-white/45">
-            Try another title from search, or check back when it airs.
-          </p>
-          {fallbackHref && (
-            <Link
-              href={fallbackHref}
-              prefetch={false}
-              className="nb-btn nb-btn-accent mt-3 w-full justify-center"
-            >
-              <Play size={15} fill="currentColor" />
-              Try episode 1
-            </Link>
-          )}
+    <div className="flex flex-col gap-2.5">
+      {/* Toolbar: jump-to-episode + range select + search */}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const target = Number(jump);
+          if (!Number.isInteger(target) || target < 1) return;
+          const max = episodes.length || totalEpisodes || target;
+          const ep = Math.min(target, Math.max(1, max));
+          router.push(
+            watchHref({ slug: `${baseSlug}-episode-${ep}`, malId, episode: ep }),
+          );
+        }}
+        className="flex items-center gap-1.5"
+      >
+        <div className="relative min-w-0 flex-1">
+          <input
+            value={jump}
+            onChange={(event) => setJump(event.target.value.replace(/[^0-9]/g, ""))}
+            inputMode="numeric"
+            aria-label="Jump to episode number"
+            placeholder={`Episode 1–${episodes.length || totalEpisodes || "?"}`}
+            className="nb-input pr-12"
+            style={{ minHeight: 42, fontSize: 13 }}
+          />
+          <button
+            type="submit"
+            aria-label="Jump"
+            className="absolute right-1 top-1/2 grid h-8 w-9 -translate-y-1/2 place-items-center rounded-lg bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white"
+          >
+            <ArrowRight size={14} />
+          </button>
         </div>
+
+        {chunks.length > 0 && !query && (
+          <select
+            value={page}
+            onChange={(event) => setPage(Number(event.target.value))}
+            aria-label="Episode range"
+            className="nb-input shrink-0"
+            style={{ minHeight: 42, fontSize: 12, width: 96, paddingRight: 26 }}
+          >
+            {chunks.map((chunk, i) => (
+              <option key={chunk.start} value={i}>
+                {chunk.start + 1}–{chunk.end}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {episodes.length > 12 && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((v) => !v);
+              setTerm("");
+            }}
+            aria-label={searchOpen ? "Close episode search" : "Search episodes by title"}
+            className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-white/12 bg-white/[0.05] text-white/60"
+          >
+            {searchOpen ? <X size={15} /> : <Search size={15} />}
+          </button>
+        )}
+      </form>
+
+      {searchOpen && (
+        <input
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          placeholder="Episode number or title…"
+          inputMode="search"
+          autoFocus
+          className="nb-input"
+          style={{ minHeight: 40, fontSize: 13 }}
+        />
+      )}
+
+      {/* Episode number grid */}
+      {visible.length === 0 ? (
+        <p className="py-6 text-center text-[12.5px] font-semibold text-white/45">
+          {query ? "No episode matches that search." : "No episodes found."}
+        </p>
+      ) : (
+        <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10">
+          {visible.map((ep) => {
+            const isResume = resumeEpisode > 0 && ep.number === resumeEpisode;
+            return (
+              <Link
+                key={`ep-${ep.number}`}
+                href={watchHref({
+                  slug: `${baseSlug}-episode-${ep.number}`,
+                  malId,
+                  episode: ep.number,
+                })}
+                prefetch={false}
+                title={ep.title ?? `Episode ${ep.number}`}
+                className={`relative grid aspect-square place-items-center rounded-xl border text-[12.5px] font-bold tabular-nums transition-all active:scale-95 ${
+                  isResume
+                    ? "border-transparent bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white shadow-[0_10px_22px_-14px_rgba(139,92,246,0.95)]"
+                    : "border-white/10 bg-white/[0.05] text-white/75 hover:border-white/25 hover:bg-white/[0.11] hover:text-white"
+                }`}
+              >
+                {ep.number}
+                {ep.filler && (
+                  <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-amber-300" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Latest from source (background episodes land here) */}
+      {hasAniwatch && filteredAniwatch.length > 0 && (
+        <details className="mt-1 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+          <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[0.1em] text-white/40">
+            {aniwatchCategoryName ? `Latest from ${aniwatchCategoryName}` : "Latest from source"} ·{" "}
+            {filteredAniwatch.length}
+          </summary>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {filteredAniwatch.slice(0, 40).map((ep) => {
+              const number = episodeNumberFromAniwatch(ep);
+              const audio = audioFromAniwatch(ep);
+              return (
+                <Link
+                  key={ep.id}
+                  href={watchHref({
+                    slug: ep.slug,
+                    malId,
+                    episode: number ?? undefined,
+                    audio,
+                  })}
+                  prefetch={false}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.04] px-2.5 py-2"
+                >
+                  <span className="line-clamp-1 min-w-0 flex-1 text-[12px] font-semibold text-white/75">
+                    {cleanAniwatchTitle(ep.title)}
+                  </span>
+                  <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white/60">
+                    {audio}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </details>
       )}
     </div>
   );
+}
+
+/** Small helper so the "airs in" countdown only renders when it makes sense. */
+function notAiring(
+  nextAiring: { episode: number; airingAt: number } | null | undefined,
+  notAired: boolean,
+) {
+  if (!notAired || !nextAiring) return null;
+  return <Countdown airingAt={nextAiring.airingAt} />;
 }

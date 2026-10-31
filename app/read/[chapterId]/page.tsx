@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MangaReader } from "@/components/manga/MangaReader";
 
 export const metadata: Metadata = {
-  title: "Reader · Anime Attack",
+  title: "Reader",
 };
 
 export default async function ReadPage({

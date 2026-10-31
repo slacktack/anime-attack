@@ -2,7 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Heart, Sparkles, Lightbulb, HelpCircle } from "lucide-react";
-import { getCharacterFull } from "@/lib/anime/anilist-extra";
+import { fetchCharacterFull } from "@/lib/client/api";
 import { useAi } from "@/lib/ai/useAi";
 import { htmlToText } from "@/lib/ui/htmlToText";
 import { HeroBackdrop } from "@/components/ui/HeroBackdrop";
@@ -15,7 +15,7 @@ const DESCRIPTION_CLAMP = 400;
 export function CharacterDetail({ id }: { id: number }) {
   const { data: character, isLoading } = useQuery({
     queryKey: ["character", id],
-    queryFn: () => getCharacterFull(id),
+    queryFn: () => fetchCharacterFull(id),
   });
   const { text, loading, error, ask } = useAi();
   const [q, setQ] = useState("");

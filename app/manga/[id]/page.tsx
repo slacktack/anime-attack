@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MangaDetailView } from "@/components/manga/MangaDetailView";
 
 export const metadata: Metadata = {
-  title: "Manga · Anime Attack",
+  title: "Manga series",
 };
 
 export default async function MangaDetailPage({ params }: { params: Promise<{ id: string }> }) {

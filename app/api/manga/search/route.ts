@@ -8,10 +8,12 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const query = params.get("q") ?? "";
   const page = Math.max(0, Number(params.get("page")) || 0);
-  const order = params.get("order") === "latest" ? "latest" : "popular";
+  const orderParam = params.get("order");
+  const order = orderParam === "latest" ? "latest" : "popular";
+  const readable = params.get("readable") === "1";
 
   try {
-    const data = await listManga({ query, page, order, limit: 24 });
+    const data = await listManga({ query, page, order, readable, limit: 24 });
     return NextResponse.json(data, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",

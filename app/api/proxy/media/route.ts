@@ -29,6 +29,26 @@ function absUrl(uri: string, base: string): string | null {
   }
 }
 
+/**
+ * Hosts that serve media segments with permissive CORS, so the browser can fetch
+ * them directly. Everything else is proxied even in "smart" mode: megavid-family
+ * hosts answer direct cross-origin segment requests with 403 unless a megavid
+ * Referer is present, which a browser never sends from our origin.
+ */
+const DIRECT_SEGMENT_HOSTS = ["echovideo.to"];
+
+function hostAllowsDirect(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    return DIRECT_SEGMENT_HOSTS.some(
+      (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function rewritePlaylist(
   text: string,
   baseUrl: string,
@@ -56,7 +76,7 @@ function rewritePlaylist(
 
       if (isMaster) return proxied(origin, absolute, ref, mode);
       if (mode === "full") return proxied(origin, absolute, ref, mode);
-      return absolute;
+      return hostAllowsDirect(absolute) ? absolute : proxied(origin, absolute, ref, mode);
     })
     .join("\n");
 }

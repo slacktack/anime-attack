@@ -2,18 +2,82 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Gauge,
+  Loader2,
+  RotateCw,
   Sparkles,
 } from "lucide-react";
 import type { MangaReaderData } from "@/lib/manga/types";
 
 type Quality = "high" | "low";
+
+/** A single page image that retries itself instead of leaving a blank hole. */
+function PageImage({
+  src,
+  index,
+  eager,
+  onMount,
+}: {
+  src: string;
+  index: number;
+  eager: boolean;
+  onMount: (element: HTMLImageElement | null) => void;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const resolved = attempt === 0 ? src : `${src}${src.includes("?") ? "&" : "?"}r=${attempt}`;
+
+  const retry = useCallback(() => {
+    setFailed(false);
+    setLoaded(false);
+    setAttempt((n) => n + 1);
+  }, []);
+
+  return (
+    <div className="relative w-full max-w-[900px]">
+      {!loaded && !failed && (
+        <div className="absolute inset-0 grid min-h-[220px] place-items-center bg-ink-900">
+          <Loader2 size={20} className="animate-spin text-white/30" />
+        </div>
+      )}
+
+      {failed ? (
+        <div className="grid min-h-[220px] place-items-center gap-2 rounded-xl border border-white/10 bg-ink-900 px-4 py-8 text-center">
+          <p className="text-[12.5px] font-bold text-white/70">Page {index + 1} did not load</p>
+          <button type="button" onClick={retry} className="nb-btn mx-auto">
+            <RotateCw size={14} /> Retry page
+          </button>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          ref={onMount}
+          src={resolved}
+          alt={`Page ${index + 1}`}
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            if (attempt >= 2) setFailed(true);
+            else setAttempt((n) => n + 1);
+          }}
+          className={`block w-full select-none transition-opacity duration-300 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      )}
+    </div>
+  );
+}
 
 export function MangaReader({ chapterId }: { chapterId: string }) {
   const router = useRouter();
@@ -91,11 +155,11 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
 
   if (isLoading) {
     return (
-      <div className="px-4 py-6">
-        <div className="mb-4 h-9 w-28 animate-pulse rounded-xl bg-ink-800" />
+      <div className="px-4 py-4">
+        <div className="skeleton mb-4 h-12 w-full rounded-2xl" />
         <div className="flex flex-col items-center gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="aspect-[2/3] w-full max-w-[900px] animate-pulse bg-ink-800" />
+            <div key={i} className="skeleton aspect-[2/3] w-full max-w-[900px]" />
           ))}
         </div>
       </div>
@@ -104,13 +168,13 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
 
   if (isError || !data) {
     return (
-      <div className="px-4 py-10">
-        <Link href="/manga" className="nb-btn mb-5">
+      <div className="px-4 py-8">
+        <Link href="/manga" className="nb-btn mb-4">
           <ArrowLeft size={16} /> Manga
         </Link>
-        <div className="nb-card bg-ink-800 p-5">
-          <p className="text-sm font-bold">This chapter won&apos;t open</p>
-          <p className="mt-1 text-xs text-white/50">
+        <div className="nb-card p-5 text-center">
+          <p className="font-display text-[15px] font-bold">This chapter won&apos;t open</p>
+          <p className="mt-1 text-[12.5px] text-white/50">
             {error instanceof Error ? error.message : "The pages may have been removed."}
           </p>
         </div>
@@ -120,69 +184,66 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
 
   return (
     <div className="relative -mx-4 pb-24">
-      <div className="sticky top-0 z-40 border-b-2 border-nb-border bg-ink-solid/90 backdrop-blur-md">
-        <div className="flex items-center gap-2 px-3 py-2">
+      <div className="app-dock sticky top-1 z-40 mx-2 rounded-2xl">
+        <div className="flex items-center gap-2 px-2.5 py-2">
           <Link
             href={`/manga/${data.mangaId}`}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-nb-border bg-ink-800"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/[0.06]"
             aria-label="Back to manga"
           >
             <ArrowLeft size={16} />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="line-clamp-1 text-xs font-black uppercase tracking-wide text-white/90">
-              {data.mangaTitle}
-            </p>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              Chapter {data.chapter ?? "—"}
+            <p className="line-clamp-1 font-display text-[12px] font-bold">{data.mangaTitle}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40">
+              Ch. {data.chapter ?? "—"}
               {data.title ? ` · ${data.title}` : ""}
             </p>
           </div>
           <button
             type="button"
             onClick={() => changeQuality(quality === "high" ? "low" : "high")}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border-2 border-nb-border bg-ink-800 px-3 text-[10px] font-black uppercase tracking-wide"
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.06] px-2.5 text-[10px] font-black uppercase tracking-wide"
             aria-pressed={quality === "low"}
           >
             {quality === "high" ? <Sparkles size={13} /> : <Gauge size={13} />}
             {quality === "high" ? "HD" : "Lite"}
           </button>
         </div>
-        <div className="h-1 w-full bg-ink-700">
+        <div className="mx-2.5 mb-2 h-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full bg-accent-library transition-[width] duration-150"
-            style={{ width: `${pages.length ? (current / pages.length) * 100 : 0}%` }}
+            className="h-full rounded-full transition-[width] duration-150"
+            style={{
+              width: `${pages.length ? (current / pages.length) * 100 : 0}%`,
+              background: "linear-gradient(90deg, var(--accent-purple), var(--accent-blue))",
+            }}
           />
         </div>
       </div>
 
       {pages.length === 0 ? (
         <div className="px-4 py-10 text-center">
-          <p className="text-sm font-bold">No pages available</p>
-          <p className="mt-1 text-xs text-white/50">Try a different chapter or quality.</p>
+          <p className="font-display text-[14px] font-bold">No pages available</p>
+          <p className="mt-1 text-[12px] text-white/50">Try a different chapter or quality.</p>
         </div>
       ) : (
-        <div className="flex flex-col items-center bg-black">
+        <div className="mt-2 flex flex-col items-center gap-0.5 bg-black">
           {pages.map((src, index) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <PageImage
               key={`${quality}-${index}`}
-              ref={(element) => {
+              src={src}
+              index={index}
+              eager={index < 3}
+              onMount={(element) => {
                 imageRefs.current[index] = element;
               }}
-              src={src}
-              alt={`Page ${index + 1}`}
-              loading={index < 3 ? "eager" : "lazy"}
-              decoding="async"
-              referrerPolicy="no-referrer"
-              className="block w-full max-w-[900px] select-none"
             />
           ))}
         </div>
       )}
 
-      <div className="px-4 pt-6">
-        <div className="nb-card bg-ink-800 p-4 text-center">
+      <div className="px-4 pt-5">
+        <div className="nb-card p-4 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
             End of chapter {data.chapter ?? ""}
           </p>
@@ -208,28 +269,36 @@ export function MangaReader({ chapterId }: { chapterId: string }) {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-nb-border bg-ink-800/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-3 py-2">
+      <div className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="app-dock mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-2xl px-2.5 py-2">
           {data.prev ? (
-            <Link href={`/read/${data.prev.id}`} className="nb-btn flex-1 justify-center min-h-11">
+            <Link href={`/read/${data.prev.id}`} className="nb-btn min-h-11 flex-1 justify-center">
               <ChevronLeft size={16} /> Prev
             </Link>
           ) : (
-            <button type="button" disabled className="nb-btn flex-1 justify-center min-h-11 opacity-40">
+            <button
+              type="button"
+              disabled
+              className="nb-btn min-h-11 flex-1 justify-center opacity-40"
+            >
               <ChevronLeft size={16} /> Prev
             </button>
           )}
-          <span className="flex min-w-20 items-center justify-center gap-1 text-[11px] font-black tabular-nums">
+          <span className="flex min-w-16 items-center justify-center gap-1 text-[11px] font-black tabular-nums">
             {current}
             <span className="text-white/30">/</span>
             {pages.length}
           </span>
           {data.next ? (
-            <Link href={`/read/${data.next.id}`} className="nb-btn flex-1 justify-center min-h-11">
+            <Link href={`/read/${data.next.id}`} className="nb-btn min-h-11 flex-1 justify-center">
               Next <ChevronRight size={16} />
             </Link>
           ) : (
-            <button type="button" disabled className="nb-btn flex-1 justify-center min-h-11 opacity-40">
+            <button
+              type="button"
+              disabled
+              className="nb-btn min-h-11 flex-1 justify-center opacity-40"
+            >
               Next <ChevronRight size={16} />
             </button>
           )}

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { fetchMegaSource, resolveTargetFromSlug, type MegaAudio } from "@/lib/anime/mega";
+import { resolveSlugToMal } from "@/lib/anime/slug-resolve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,12 +25,33 @@ export async function GET(request: NextRequest) {
   let audio: MegaAudio = audioParam === "dub" ? "dub" : "sub";
 
   try {
+    if ((!malId || !episode) && slug) {
+      // Preferred path: scrape the player iframe (still works on older posts).
+      try {
+        const target = await resolveTargetFromSlug(slug);
+        malId = target.malId;
+        episode = target.episode;
+        if (!audioParam) audio = target.audio;
+      } catch {
+        // Current posts hide the megavid URL behind a player indirection, so fall
+        // back to title matching: slug -> post title -> AniList -> idMal.
+        const resolved = await resolveSlugToMal(slug);
+        if (resolved) {
+          malId = malId ?? resolved.malId;
+          episode = episode ?? resolved.episode;
+        }
+      }
+    }
+
     if (!malId || !episode) {
-      if (!slug) return noStore({ status: "error", message: "Missing slug, mal and ep" }, 400);
-      const target = await resolveTargetFromSlug(slug);
-      malId = target.malId;
-      episode = target.episode;
-      if (!audioParam) audio = target.audio;
+      return noStore(
+        {
+          status: "error",
+          message:
+            "Could not work out which anime this episode belongs to. Open it from the anime page.",
+        },
+        404,
+      );
     }
 
     if (!malId || episode <= 0) {

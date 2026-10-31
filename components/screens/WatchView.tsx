@@ -11,10 +11,15 @@ import {
   Play,
   RefreshCw,
   Server,
+  SkipBack,
+  SkipForward,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
+import { EpisodeList } from "@/components/screens/EpisodeList";
+import { SeasonSwitcher } from "@/components/screens/SeasonSwitcher";
+import { fetchWatchEpisodes } from "@/lib/client/api";
 
 type Audio = "sub" | "dub";
 
@@ -75,6 +80,13 @@ function proxiedMedia(url: string, mode: "smart" | "full" = "smart"): string {
   )}&mode=${mode}`;
 }
 
+function slugifyTitle(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
   const m = Math.floor(seconds / 60);
@@ -116,8 +128,22 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   });
 
   const data = stream.data;
-  const showTitle = titleFromSlug(slug);
   const epNumber = data?.episode ?? episode;
+
+  // Episode navigation data (AniList entry behind the MAL id + episode list).
+  const shelf = useQuery({
+    queryKey: ["watch-shelf", malId],
+    queryFn: () => fetchWatchEpisodes(malId as number),
+    enabled: malId != null,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+
+  const showTitle = shelf.data?.title ?? titleFromSlug(slug);
+  const totalEpisodes = shelf.data?.totalEpisodes ?? null;
+  const currentEp = epNumber ?? 1;
+  const hasPrev = currentEp > 1;
+  const hasNext = totalEpisodes != null ? currentEp < totalEpisodes : currentEp < 100000;
 
   const progressKey =
     data?.malId && data?.episode ? `anime:progress:${data.malId}:${data.episode}` : null;
@@ -277,6 +303,41 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
         </div>
       </div>
 
+      <div className="px-4 sm:px-0">
+        <div className="grid grid-cols-2 gap-2">
+          {hasPrev ? (
+            <Link
+              href={`/watch/${slugifyTitle(showTitle)}-episode-${currentEp - 1}?mal=${malId ?? ""}&ep=${
+                currentEp - 1
+              }&audio=${audio}`}
+              prefetch={false}
+              className="aa-card aa-card-raise flex min-h-[46px] items-center justify-center gap-2 text-[12.5px] font-bold"
+            >
+              <SkipBack size={15} /> Episode {currentEp - 1}
+            </Link>
+          ) : (
+            <span className="aa-card flex min-h-[46px] items-center justify-center gap-2 text-[12.5px] font-bold text-white/25">
+              <SkipBack size={15} /> First episode
+            </span>
+          )}
+          {hasNext ? (
+            <Link
+              href={`/watch/${slugifyTitle(showTitle)}-episode-${currentEp + 1}?mal=${malId ?? ""}&ep=${
+                currentEp + 1
+              }&audio=${audio}`}
+              prefetch={false}
+              className="aa-cta min-h-[46px] text-[12.5px]"
+            >
+              Episode {currentEp + 1} <SkipForward size={15} />
+            </Link>
+          ) : (
+            <span className="aa-card flex min-h-[46px] items-center justify-center gap-2 text-[12.5px] font-bold text-white/25">
+              Last episode <SkipForward size={15} />
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 px-4 sm:px-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -369,14 +430,62 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {shelf.data?.anilistId != null && (
+            <Link href={`/anime/${shelf.data.anilistId}`} className="nb-btn">
+              Show details
+            </Link>
+          )}
           <Link href="/" className="nb-btn">
             Home
           </Link>
-          <Link href={`/search?q=${encodeURIComponent(showTitle)}`} className="nb-btn">
-            Find episodes
-          </Link>
         </div>
       </div>
+
+      {/* ── Episode browser: seasons + jump to any episode ─────── */}
+      {malId != null && (
+        <section className="mx-4 aa-card p-4 sm:mx-0">
+          <div className="aa-section">
+            <h2 className="aa-section-title">
+              Episodes
+              {totalEpisodes ? (
+                <span className="text-[11px] font-semibold tracking-normal text-white/35">
+                  {totalEpisodes} total
+                </span>
+              ) : null}
+            </h2>
+          </div>
+
+          {shelf.data?.anilistId != null && (
+            <div className="mb-3">
+              <SeasonSwitcher
+                id={shelf.data.anilistId}
+                title={showTitle}
+                year={shelf.data.year}
+              />
+            </div>
+          )}
+
+          {shelf.isLoading ? (
+            <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 md:grid-cols-10">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <div key={i} className="skeleton aspect-square rounded-xl" />
+              ))}
+            </div>
+          ) : shelf.isError ? (
+            <p className="py-4 text-center text-[12.5px] font-semibold text-white/45">
+              Couldn&apos;t load the episode list. Use the player and retry.
+            </p>
+          ) : (
+            <EpisodeList
+              malId={malId}
+              animeTitle={showTitle}
+              totalEpisodes={totalEpisodes}
+              isMovie={shelf.data?.isMovie}
+              resumeEpisode={currentEp}
+            />
+          )}
+        </section>
+      )}
 
       {hardError && (
         <div className="mx-4 nb-card p-4 sm:mx-0">

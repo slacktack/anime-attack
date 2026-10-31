@@ -18,7 +18,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const title = formatSlugForTitle(slug) || "Watch";
   return {
-    title: `${title} · Anime Attack`,
+    title,
     description: `Watch ${title} in sub or dub with adaptive quality streaming.`,
   };
 }

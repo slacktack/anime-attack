@@ -15,7 +15,7 @@ function MangaCardView({ manga }: { manga: MangaCard }) {
       className="group flex min-w-0 flex-col gap-2"
       prefetch={false}
     >
-      <div className="nb-border-thick nb-shadow relative overflow-hidden rounded-xl bg-ink-800">
+      <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-ink-800 shadow-[0_16px_34px_-26px_rgba(0,0,0,0.95)]">
         {manga.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -35,11 +35,12 @@ function MangaCardView({ manga }: { manga: MangaCard }) {
             Ch. {manga.latestChapter}
           </span>
         )}
-        <span className="absolute right-1.5 top-1.5 rounded-md bg-accent-purple px-1.5 py-0.5 text-[9px] font-black uppercase text-black">
+        <span className="absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white/85 backdrop-blur">
           {manga.status ?? "manga"}
         </span>
+        <div className="aa-scrim-soft pointer-events-none absolute inset-0" />
       </div>
-      <p className="line-clamp-2 text-xs font-bold leading-snug text-white/90">{manga.title}</p>
+      <p className="line-clamp-2 font-display text-[12px] font-bold leading-snug text-white/90">{manga.title}</p>
     </Link>
   );
 }
@@ -60,7 +61,7 @@ function GridSkeleton() {
 export function MangaBrowser() {
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(0);
-  const [order, setOrder] = useState<"popular" | "latest">("popular");
+  const [order, setOrder] = useState<"readable" | "popular" | "latest">("readable");
   const query = useDebounce(term, 350);
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export function MangaBrowser() {
     queryKey: ["manga-list", query, page, order],
     queryFn: async (): Promise<MangaList> => {
       const params = new URLSearchParams({ page: String(page), order });
+      if (order === "readable") params.set("readable", "1");
       if (query.trim()) params.set("q", query.trim());
       const res = await fetch(`/api/manga/search?${params.toString()}`);
       const json = await res.json();
@@ -109,20 +111,33 @@ export function MangaBrowser() {
         />
       </div>
 
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setOrder("readable")}
+          aria-pressed={order === "readable"}
+          className="aa-pill"
+          data-active={order === "readable"}
+        >
+          <BookOpen size={13} /> Readable here
+        </button>
         <button
           type="button"
           onClick={() => setOrder("popular")}
-          className={`nb-btn shrink-0 ${order === "popular" ? "nb-btn-accent" : ""}`}
+          aria-pressed={order === "popular"}
+          className="aa-pill"
+          data-active={order === "popular"}
         >
-          <Flame size={15} /> Popular
+          <Flame size={13} /> Popular
         </button>
         <button
           type="button"
           onClick={() => setOrder("latest")}
-          className={`nb-btn shrink-0 ${order === "latest" ? "nb-btn-accent" : ""}`}
+          aria-pressed={order === "latest"}
+          className="aa-pill"
+          data-active={order === "latest"}
         >
-          <Sparkles size={15} /> Latest
+          <Sparkles size={13} /> Latest
         </button>
       </div>
 

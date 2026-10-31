@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, Play, Star, Tv, Clapperboard, Info } from "lucide-react";
-import { getAnimeDetails, getCharacters, getRecommendations } from "@/lib/anime/anilist";
-import { getAnimeExtras } from "@/lib/anime/anilist-extra";
+import { fetchAnimeDetail } from "@/lib/client/api";
 import { findCategory } from "@/lib/anime/aniwatch";
 import { htmlToText } from "@/lib/ui/htmlToText";
 import { Carousel } from "@/components/ui/Carousel";
@@ -14,6 +13,7 @@ import { Card3D } from "@/components/ui/Card3D";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { ProgressControl } from "@/components/ui/ProgressControl";
 import { AiPanel } from "@/components/screens/AiPanel";
+import { getSpoilerCeiling } from "@/lib/storage/store";
 import { EpisodeList } from "@/components/screens/EpisodeList";
 import { SeasonSwitcher } from "@/components/screens/SeasonSwitcher";
 import { Countdown } from "@/components/ui/Countdown";
@@ -52,13 +52,20 @@ function CarouselSkeleton({ count = 6, wide = false }: { count?: number; wide?: 
 
 export function AnimeDetail({ id }: { id: number }) {
   const [storyOpen, setStoryOpen] = useState(false);
-  const { data: anime, isLoading } = useQuery({
-    queryKey: ["anime", id],
-    queryFn: () => getAnimeDetails(id),
+  const [tab, setTab] = useState<"episodes" | "about" | "ai">("episodes");
+  const [resumeEpisode, setResumeEpisode] = useState(0);
+
+  useEffect(() => setResumeEpisode(getSpoilerCeiling(id)), [id]);
+
+  const detail = useQuery({
+    queryKey: ["anime-detail", id],
+    queryFn: () => fetchAnimeDetail(id),
+    staleTime: 5 * 60 * 1000,
   });
-  const chars = useQuery({ queryKey: ["chars", id], queryFn: () => getCharacters(id) });
-  const recs = useQuery({ queryKey: ["recs", id], queryFn: () => getRecommendations(id) });
-  const extras = useQuery({ queryKey: ["extras", id], queryFn: () => getAnimeExtras(id) });
+  const anime = detail.data?.anime;
+  const isLoading = detail.isLoading;
+  const chars = { data: detail.data?.characters, isLoading: detail.isLoading };
+  const recs = { data: detail.data?.recommendations, isLoading: detail.isLoading };
   const aniwatchCat = useQuery({
     queryKey: ["aniwatch-cat", anime?.title],
     queryFn: async () => {
@@ -91,6 +98,16 @@ export function AnimeDetail({ id }: { id: number }) {
     enabled: !!anime?.title,
   });
 
+  // Give the tab a real title (the route is a dynamic segment with no metadata).
+  useEffect(() => {
+    if (!anime?.title) return;
+    const previous = document.title;
+    document.title = `${anime.title} · Anime Attack`;
+    return () => {
+      document.title = previous;
+    };
+  }, [anime?.title]);
+
   if (isLoading || !anime) {
     return (
       <div className="px-4 pb-10 pt-3">
@@ -102,7 +119,7 @@ export function AnimeDetail({ id }: { id: number }) {
     );
   }
 
-  const malId = extras.data?.idMal ?? null;
+  const malId = detail.data?.malId ?? null;
   const isMovie = anime.type === "MOVIE" || anime.episodes === 1;
   const watchQuery = new URLSearchParams({ audio: "sub" });
   if (malId) watchQuery.set("mal", String(malId));
@@ -230,130 +247,170 @@ export function AnimeDetail({ id }: { id: number }) {
         </div>
       </section>
 
-      {/* ── Seasons & related ────────────────────────────────── */}
-      <SeasonSwitcher id={id} title={anime.title} />
-
-      {/* ── Story ────────────────────────────────────────────── */}
-      {story && (
-        <section className="nb-card p-4">
-          <div className="nb-section-header">
-            <span className="flex items-center gap-2">
-              <Info size={15} className="text-accent-blue" />
-              Story
-            </span>
-          </div>
-          <p
-            className={`whitespace-pre-wrap text-[13.5px] leading-relaxed text-white/65 ${
-              !storyOpen && longStory ? "line-clamp-5" : ""
-            }`}
-          >
-            {story}
-          </p>
-          {longStory && (
+      {/* ── Segmented tabs ───────────────────────────────────── */}
+      <div className="sticky top-[62px] z-30 -mx-4 px-4 py-2 backdrop-blur-xl">
+        <div className="flex gap-1 rounded-2xl border border-white/10 bg-[color:var(--ink-900)]/70 p-1">
+          {(
+            [
+              ["episodes", "Episodes"],
+              ["about", "About"],
+              ["ai", "AI recap"],
+            ] as const
+          ).map(([key, label]) => (
             <button
+              key={key}
               type="button"
-              onClick={() => setStoryOpen((v) => !v)}
-              className="mt-2 text-[12px] font-bold text-accent-purple"
+              onClick={() => setTab(key)}
+              aria-pressed={tab === key}
+              className={`flex-1 rounded-xl py-2 text-[12.5px] font-bold transition-all ${
+                tab === key
+                  ? "bg-gradient-to-br from-[color:var(--accent-purple)] to-[color:var(--accent-blue)] text-white shadow-[0_12px_26px_-16px_rgba(139,92,246,0.9)]"
+                  : "text-white/55 hover:text-white/80"
+              }`}
             >
-              {storyOpen ? "Show less" : "Read more"}
+              {label}
             </button>
-          )}
+          ))}
+        </div>
+      </div>
+
+      {tab === "episodes" && (
+        <section id="episodes" className="aa-card p-4" data-card-accent="progress">
+          <div className="mb-3">
+            <SeasonSwitcher
+              id={id}
+              title={anime.title}
+              year={anime.seasonYear}
+              type={anime.type}
+            />
+          </div>
+          <EpisodeList
+            malId={malId}
+            animeTitle={anime.title}
+            totalEpisodes={anime.episodes}
+            aniwatchCategoryId={aniwatchCat.data?.id}
+            aniwatchCategoryName={aniwatchCat.data?.name}
+            animeStatus={anime.status}
+            nextAiring={anime.nextAiringEpisode}
+            fallbackHref={watchHref}
+            isMovie={isMovie}
+            resumeEpisode={resumeEpisode}
+          />
         </section>
       )}
 
-      {/* ── Progress ─────────────────────────────────────────── */}
-      <ProgressControl anime={anime} maxEpisodes={anime.episodes} />
-
-      <AiPanel anime={anime} />
-
-      {/* ── Episodes ─────────────────────────────────────────── */}
-      <section id="episodes" className="nb-card p-4" data-card-accent="progress">
-        <div className="nb-section-header">
-          <span className="flex items-center gap-2">
-            <Tv size={15} className="text-accent-purple" />
-            {isMovie ? "Movie" : "Episodes"}
-          </span>
-          {anime.episodes ? (
-            <span className="text-[11px] font-semibold tracking-normal text-white/35">
-              {anime.episodes} total
-            </span>
-          ) : (
-            <span className="text-[11px] font-semibold tracking-normal text-white/35">
-              {notAired ? "Upcoming" : "Source list"}
-            </span>
+      {tab === "about" && (
+        <div className="flex flex-col gap-3">
+          {story && (
+            <section className="aa-card p-4">
+              <div className="aa-section">
+                <h2 className="aa-section-title">
+                  <Info size={15} className="text-accent-blue" />
+                  Story
+                </h2>
+              </div>
+              <p
+                className={`whitespace-pre-wrap text-[13.5px] leading-relaxed text-white/65 ${
+                  !storyOpen && longStory ? "line-clamp-6" : ""
+                }`}
+              >
+                {story}
+              </p>
+              {longStory && (
+                <button
+                  type="button"
+                  onClick={() => setStoryOpen((v) => !v)}
+                  className="mt-2 text-[12px] font-bold text-accent-purple"
+                >
+                  {storyOpen ? "Show less" : "Read more"}
+                </button>
+              )}
+            </section>
           )}
-        </div>
-        <EpisodeList
-          malId={malId}
-          animeTitle={anime.title}
-          totalEpisodes={anime.episodes}
-          aniwatchCategoryId={aniwatchCat.data?.id}
-          aniwatchCategoryName={aniwatchCat.data?.name}
-          animeStatus={anime.status}
-          nextAiring={anime.nextAiringEpisode}
-          fallbackHref={watchHref}
-          isMovie={isMovie}
-        />
-      </section>
 
-      {/* ── Characters ───────────────────────────────────────── */}
-      <section data-card-accent="characters">
-        <div className="nb-section-header">
-          <span className="flex items-center gap-2">
-            <Clapperboard size={15} className="text-accent-crimson" />
-            Characters
-          </span>
-        </div>
-        {chars.isLoading ? (
-          <CarouselSkeleton count={6} wide />
-        ) : chars.data && chars.data.length > 0 ? (
-          <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
-            {chars.data.map((c) => (
-              <Link key={c.id} href={`/character/${c.id}`} className="block w-[92px] shrink-0">
-                <Card3D className="overflow-hidden rounded-2xl border border-nb-border bg-ink-700">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={c.image ?? ""}
-                    alt={c.name}
-                    loading="lazy"
-                    className="aspect-[2/3] w-full object-cover"
-                  />
-                  <p className="line-clamp-2 px-2 py-1.5 text-[10.5px] font-semibold leading-tight">
-                    {c.name}
-                  </p>
-                </Card3D>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
-            No cast data for this title yet.
-          </p>
-        )}
-      </section>
+          {anime.studios.length > 0 && (
+            <section className="aa-card p-4">
+              <div className="aa-section">
+                <h2 className="aa-section-title">
+                  <Clapperboard size={15} className="text-accent-crimson" />
+                  Studio
+                </h2>
+              </div>
+              <p className="text-[13px] font-semibold text-white/70">
+                {anime.studios.join(", ")}
+              </p>
+            </section>
+          )}
 
-      {/* ── Recommendations ──────────────────────────────────── */}
-      <section data-card-accent="recommend">
-        <div className="nb-section-header">
-          <span className="flex items-center gap-2">
-            <Star size={15} className="text-accent-gold" />
-            You might like
-          </span>
+          <ProgressControl anime={anime} maxEpisodes={anime.episodes} />
+
+          <section data-card-accent="characters">
+            <div className="aa-section">
+              <h2 className="aa-section-title">
+                <Clapperboard size={15} className="text-accent-crimson" />
+                Characters
+              </h2>
+            </div>
+            {chars.isLoading ? (
+              <CarouselSkeleton count={5} wide />
+            ) : chars.data && chars.data.length > 0 ? (
+              <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
+                {chars.data.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/character/${c.id}`}
+                    className="block w-[92px] shrink-0"
+                  >
+                    <Card3D className="overflow-hidden rounded-2xl border border-nb-border bg-ink-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={c.image ?? ""}
+                        alt={c.name}
+                        loading="lazy"
+                        className="aspect-[2/3] w-full object-cover"
+                      />
+                      <p className="line-clamp-2 px-2 py-1.5 text-[10.5px] font-semibold leading-tight">
+                        {c.name}
+                      </p>
+                    </Card3D>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
+                No cast data for this title yet.
+              </p>
+            )}
+          </section>
         </div>
-        {recs.isLoading ? (
-          <CarouselSkeleton />
-        ) : recs.data && recs.data.length > 0 ? (
-          <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
-            {recs.data.map((a) => (
-              <PosterCard key={a.id} anime={a} />
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
-            No recommendations available.
-          </p>
-        )}
-      </section>
+      )}
+
+      {tab === "ai" && (
+        <div className="flex flex-col gap-3">
+          <AiPanel anime={anime} />
+          <section data-card-accent="recommend">
+            <div className="aa-section">
+              <h2 className="aa-section-title">
+                <Star size={15} className="text-accent-gold" />
+                You might like
+              </h2>
+            </div>
+            {recs.isLoading ? (
+              <CarouselSkeleton />
+            ) : recs.data && recs.data.length > 0 ? (
+              <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+                {recs.data.map((a) => (
+                  <PosterCard key={a.id} anime={a} />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-white/12 px-3 py-6 text-center text-[12.5px] font-semibold text-white/40">
+                No recommendations available.
+              </p>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

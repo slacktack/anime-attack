@@ -88,6 +88,8 @@ export async function listManga(opts: {
   page?: number;
   order?: "popular" | "latest";
   limit?: number;
+  /** Only titles that actually have hosted chapters we can render in the reader. */
+  readable?: boolean;
 }): Promise<MangaList> {
   const limit = opts.limit ?? 24;
   const page = Math.max(0, opts.page ?? 0);
@@ -97,7 +99,10 @@ export async function listManga(opts: {
   params.append("contentRating[]", "safe");
   params.append("contentRating[]", "suggestive");
   params.append("includes[]", "cover_art");
-
+  // NOTE: /manga rejects translatedLanguage[] (that is a chapter-feed param);
+  // the list endpoint uses availableTranslatedLanguage[].
+  params.append("availableTranslatedLanguage[]", "en");
+  if (opts.readable) params.set("hasAvailableChapters", "true");
   if (opts.query?.trim()) {
     params.set("title", opts.query.trim());
     params.set("order[relevance]", "desc");

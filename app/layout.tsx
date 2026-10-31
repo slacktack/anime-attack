@@ -57,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-[100dvh] overflow-x-hidden bg-ink-solid pb-[calc(7rem+env(safe-area-inset-bottom))] text-white antialiased">
         <ThemeProvider>
+          <div className="aa-aurora" aria-hidden />
           <ScrollProgress />
           <Providers>
             <AppHeader />
