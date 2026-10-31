@@ -24,10 +24,10 @@ export default function HomePage() {
             Good Evening
           </span>
           <h1 className="text-gradient text-5xl font-black tracking-tight sm:text-7xl">
-            Anime Companion
+            Anime Attack
           </h1>
           <p className="mt-4 max-w-sm font-bold text-base text-white/80 sm:max-w-md sm:text-lg">
-            Your cinematic guide to everything anime — track, discover, and dive in.
+            Watch anime, read manga, and track everything — no ads, no noise.
           </p>
         </Parallax>
       </ScrollScene>

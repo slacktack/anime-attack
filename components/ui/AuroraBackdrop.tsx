@@ -17,7 +17,10 @@ export function AuroraBackdrop({ tint = "#7C3AED" }: { tint?: string }) {
   const [enable, setEnable] = useState(false);
   useEffect(() => {
     const lowEnd = (navigator.hardwareConcurrency ?? 4) <= 2;
-    setEnable(!reduced && !lowEnd && webglOk());
+    const smallScreen = window.matchMedia("(max-width: 1023px), (pointer: coarse)").matches;
+    const saveData =
+      (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+    setEnable(!reduced && !lowEnd && !smallScreen && !saveData && webglOk());
   }, [reduced]);
 
   return (

@@ -10,20 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type ThemeId =
-  | "midnight"
-  | "neobrutalist"
-  | "neobrutalist-light"
-  | "neon"
-  | "retro"
-  | "obsidian"
-  | "sakura"
-  | "cyber"
-  | "gold"
-  | "mono"
-  | "paper"
-  | "mint"
-  | "coral";
+export type ThemeId = "midnight" | "obsidian" | "neon" | "sakura" | "paper";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -32,19 +19,11 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: ThemeDefinition[] = [
-  { id: "midnight", label: "Midnight", primary: "#7C3AED" },
-  { id: "neobrutalist", label: "Brutal", primary: "#8B5CF6" },
-  { id: "neobrutalist-light", label: "Brutal Light", primary: "#8B5CF6" },
-  { id: "neon", label: "Neon", primary: "#FF00FF" },
-  { id: "retro", label: "Retro", primary: "#FF6B9D" },
-  { id: "obsidian", label: "Obsidian", primary: "#2DD4BF" },
-  { id: "sakura", label: "Sakura", primary: "#F472B6" },
-  { id: "cyber", label: "Cyber", primary: "#22D3EE" },
-  { id: "gold", label: "Gold", primary: "#F5C518" },
-  { id: "mono", label: "Mono", primary: "#E5E5E5" },
-  { id: "paper", label: "Paper", primary: "#7C3AED" },
-  { id: "mint", label: "Mint", primary: "#0D9488" },
-  { id: "coral", label: "Coral", primary: "#E11D48" },
+  { id: "midnight", label: "Midnight", primary: "#8b5cf6" },
+  { id: "obsidian", label: "Obsidian", primary: "#2dd4bf" },
+  { id: "neon", label: "Neon", primary: "#d946ef" },
+  { id: "sakura", label: "Sakura", primary: "#ec4899" },
+  { id: "paper", label: "Paper", primary: "#6d28d9" },
 ];
 
 const STORAGE_KEY = "ac.theme";
@@ -62,13 +41,20 @@ function isThemeId(value: string | null): value is ThemeId {
   return !!value && THEMES.some((t) => t.id === value);
 }
 
+function systemTheme(): ThemeId {
+  if (typeof window === "undefined") return DEFAULT_THEME;
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches
+    ? "paper"
+    : DEFAULT_THEME;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    const next = isThemeId(stored) ? stored : DEFAULT_THEME;
+    const next = isThemeId(stored) ? stored : systemTheme();
     setThemeState(next);
     document.documentElement.setAttribute("data-theme", next);
   }, []);

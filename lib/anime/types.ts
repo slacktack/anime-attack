@@ -33,6 +33,12 @@ export const EpisodeSchema = z.object({
 });
 export type Episode = z.infer<typeof EpisodeSchema>;
 
+export const NextAiringSchema = z.object({
+  episode: z.number(),
+  airingAt: z.number(),
+});
+export type NextAiring = z.infer<typeof NextAiringSchema>;
+
 export const AnimeSchema = AnimeSummarySchema.extend({
   bannerImage: z.string().nullable().default(null),
   description: z.string().nullable().default(null),
@@ -40,5 +46,15 @@ export const AnimeSchema = AnimeSummarySchema.extend({
   status: AnimeStatusSchema.nullable().default(null),
   episodes: z.number().nullable().default(null),
   studios: z.array(z.string()).default([]),
+  seasonYear: z.number().nullable().default(null),
+  nextAiringEpisode: NextAiringSchema.nullable().default(null),
 });
 export type Anime = z.infer<typeof AnimeSchema>;
+
+/** A related entry from AniList `Media.relations` (seasons, sequels, spin-offs). */
+export const RelatedAnimeSchema = AnimeSummarySchema.extend({
+  relationType: z.string(),
+  episodes: z.number().nullable().default(null),
+  status: AnimeStatusSchema.nullable().default(null),
+});
+export type RelatedAnime = z.infer<typeof RelatedAnimeSchema>;

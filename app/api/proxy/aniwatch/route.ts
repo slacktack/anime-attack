@@ -6,11 +6,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
   }
 
+  const referer = request.nextUrl.searchParams.get("ref") ?? "https://aniwatchtv.by/";
+
   try {
     const res = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Referer: "https://aniwatchtv.by/",
+        Referer: referer,
       },
     });
 

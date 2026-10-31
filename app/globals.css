@@ -1,42 +1,150 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0a0a0a;
-  --foreground: #f0f0f0;
+/* ─────────────────────────────────────────────
+   ANIME ATTACK — modern glass design system
+   ───────────────────────────────────────────── */
 
-  /* Neobrutalist Ink Scale */
-  --ink-solid: #0a0a0a;
-  --ink-900: #0a0a0a;
-  --ink-800: #141414;
-  --ink-700: #1c1c1c;
+:root,
+[data-theme="midnight"] {
+  --background: #06060a;
+  --foreground: #f4f4f9;
+  --ink-solid: #06060a;
+  --ink-900: #09090f;
+  --ink-800: #0f0f17;
+  --ink-700: #17171f;
 
-  /* Neobrutalist Border */
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
+  --glass: rgba(255, 255, 255, 0.045);
+  --glass-strong: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-border-bright: rgba(255, 255, 255, 0.16);
 
-  /* Neobrutalist Shadow */
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
+  --nb-border-color: rgba(255, 255, 255, 0.09);
+  --nb-border-color-dim: rgba(255, 255, 255, 0.06);
+  --nb-shadow-color: rgba(0, 0, 0, 0.5);
+  --nb-shadow-color-sm: rgba(0, 0, 0, 0.38);
+  --nb-shadow-color-lg: rgba(0, 0, 0, 0.62);
 
-  /* Card Accent Colors — one per card type, no rainbow chaos */
-  --nb-accent-ai: #8b5cf6;        /* Purple — AI Panel */
-  --nb-accent-progress: #f97316;  /* Orange — Episodes / Progress */
-  --nb-accent-characters: #eab308;/* Yellow — Characters */
-  --nb-accent-stats: #22c55e;     /* Green — Stats / Ratings */
-  --nb-accent-recommend: #3b82f6; /* Blue — Recommendations */
-  --nb-accent-search: #ec4899;    /* Pink — Search */
-  --nb-accent-library: #06b6d4;   /* Cyan — Library */
-  --nb-accent-quote: #f59e0b;     /* Amber — Quote Widget */
+  --accent-purple: #8b5cf6;
+  --accent-blue: #38bdf8;
+  --accent-crimson: #fb7185;
+  --accent-gold: #fbbf24;
 
-  /* Legacy accent aliases (for theme compatibility) */
-  --accent-purple: var(--nb-accent-ai);
-  --accent-blue: var(--nb-accent-recommend);
-  --accent-crimson: #ef4444;
-  --accent-gold: var(--nb-accent-quote);
+  --nb-accent-ai: #8b5cf6;
+  --nb-accent-progress: #f97316;
+  --nb-accent-characters: #f43f5e;
+  --nb-accent-stats: #22d3ee;
+  --nb-accent-recommend: #a78bfa;
+  --nb-accent-search: #ec4899;
+  --nb-accent-library: #34d399;
+  --nb-accent-quote: #fbbf24;
 }
 
-/* ── Per-Card Accent Variables ── */
+[data-theme="obsidian"] {
+  --background: #050809;
+  --foreground: #eefbf8;
+  --ink-solid: #050809;
+  --ink-900: #070c0d;
+  --ink-800: #0c1416;
+  --ink-700: #122023;
+  --nb-border-color: rgba(148, 233, 220, 0.12);
+  --nb-border-color-dim: rgba(148, 233, 220, 0.08);
+  --accent-purple: #2dd4bf;
+  --accent-blue: #22d3ee;
+  --accent-crimson: #fb7185;
+  --accent-gold: #fbbf24;
+  --nb-accent-ai: #2dd4bf;
+  --nb-accent-progress: #f59e0b;
+  --nb-accent-characters: #fb7185;
+  --nb-accent-stats: #22d3ee;
+  --nb-accent-recommend: #5eead4;
+  --nb-accent-search: #f472b6;
+  --nb-accent-library: #4ade80;
+  --nb-accent-quote: #fbbf24;
+}
+
+[data-theme="neon"] {
+  --background: #08050c;
+  --foreground: #fdf4ff;
+  --ink-solid: #08050c;
+  --ink-900: #0d0712;
+  --ink-800: #140b1b;
+  --ink-700: #1d0f27;
+  --nb-border-color: rgba(244, 114, 182, 0.14);
+  --nb-border-color-dim: rgba(244, 114, 182, 0.09);
+  --accent-purple: #f0abfc;
+  --accent-blue: #67e8f9;
+  --accent-crimson: #fb7185;
+  --accent-gold: #fde047;
+  --nb-accent-ai: #d946ef;
+  --nb-accent-progress: #fb7185;
+  --nb-accent-characters: #f472b6;
+  --nb-accent-stats: #22d3ee;
+  --nb-accent-recommend: #a855f7;
+  --nb-accent-search: #ec4899;
+  --nb-accent-library: #4ade80;
+  --nb-accent-quote: #fde047;
+}
+
+[data-theme="sakura"] {
+  --background: #fff7fa;
+  --foreground: #1b0d13;
+  --ink-solid: #fff7fa;
+  --ink-900: #fff0f5;
+  --ink-800: #ffffff;
+  --ink-700: #ffe3ec;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(27, 13, 19, 0.08);
+  --glass-border-bright: rgba(27, 13, 19, 0.16);
+  --nb-border-color: rgba(27, 13, 19, 0.1);
+  --nb-border-color-dim: rgba(27, 13, 19, 0.06);
+  --nb-shadow-color: rgba(74, 20, 42, 0.16);
+  --nb-shadow-color-sm: rgba(74, 20, 42, 0.12);
+  --nb-shadow-color-lg: rgba(74, 20, 42, 0.2);
+  --accent-purple: #db2777;
+  --accent-blue: #0ea5e9;
+  --accent-crimson: #e11d48;
+  --accent-gold: #d97706;
+  --nb-accent-ai: #db2777;
+  --nb-accent-progress: #ea580c;
+  --nb-accent-characters: #e11d48;
+  --nb-accent-stats: #0891b2;
+  --nb-accent-recommend: #7c3aed;
+  --nb-accent-search: #db2777;
+  --nb-accent-library: #059669;
+  --nb-accent-quote: #d97706;
+}
+
+[data-theme="paper"] {
+  --background: #f7f5ef;
+  --foreground: #14120e;
+  --ink-solid: #f7f5ef;
+  --ink-900: #f1eee6;
+  --ink-800: #ffffff;
+  --ink-700: #ebe7dc;
+  --glass: rgba(255, 255, 255, 0.66);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(20, 18, 14, 0.08);
+  --glass-border-bright: rgba(20, 18, 14, 0.16);
+  --nb-border-color: rgba(20, 18, 14, 0.1);
+  --nb-border-color-dim: rgba(20, 18, 14, 0.06);
+  --nb-shadow-color: rgba(31, 26, 16, 0.16);
+  --nb-shadow-color-sm: rgba(31, 26, 16, 0.12);
+  --nb-shadow-color-lg: rgba(31, 26, 16, 0.2);
+  --accent-purple: #6d28d9;
+  --accent-blue: #0284c7;
+  --accent-crimson: #dc2626;
+  --accent-gold: #b45309;
+  --nb-accent-ai: #6d28d9;
+  --nb-accent-progress: #c2410c;
+  --nb-accent-characters: #be123c;
+  --nb-accent-stats: #0e7490;
+  --nb-accent-recommend: #7c3aed;
+  --nb-accent-search: #be185d;
+  --nb-accent-library: #047857;
+  --nb-accent-quote: #b45309;
+}
+
 [data-card-accent="ai"]         { --card-accent: var(--nb-accent-ai); }
 [data-card-accent="progress"]   { --card-accent: var(--nb-accent-progress); }
 [data-card-accent="characters"] { --card-accent: var(--nb-accent-characters); }
@@ -50,7 +158,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-display), ui-sans-serif, system-ui;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui;
   --font-mono: var(--font-geist-mono);
 
   --color-ink-solid: var(--ink-solid);
@@ -68,606 +176,352 @@
 }
 
 /* ── Base ── */
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-body), ui-sans-serif, system-ui;
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
-.font-display {
-  font-family: var(--font-display), ui-sans-serif, system-ui;
-  letter-spacing: -0.03em;
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 12% -10%, color-mix(in oklab, var(--accent-purple) 16%, transparent), transparent 62%),
+    radial-gradient(90% 60% at 100% 0%, color-mix(in oklab, var(--accent-blue) 10%, transparent), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-body), ui-sans-serif, system-ui;
+  text-rendering: optimizeLegibility;
+  text-wrap: pretty;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-::-webkit-scrollbar { display: none; }
-body { -webkit-tap-highlight-color: transparent; }
 
 /* ── Typography ── */
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  letter-spacing: -0.035em;
+}
+
 .nb-heading {
   font-family: var(--font-display), ui-sans-serif, system-ui;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  text-transform: none;
+  line-height: 1.02;
 }
-.nb-heading-sm { font-size: 0.875rem; }
-.nb-heading-md { font-size: 1.125rem; }
-.nb-heading-lg { font-size: 1.5rem; }
-.nb-heading-xl { font-size: 2rem; }
+.nb-heading-sm { font-size: 1rem; }
+.nb-heading-md { font-size: 1.25rem; }
+.nb-heading-lg { font-size: clamp(1.4rem, 5vw, 2rem); }
+.nb-heading-xl { font-size: clamp(2rem, 8vw, 3.75rem); }
 
-/* ── Borders (the identity) ── */
-.nb-border      { border: 2px solid var(--nb-border-color); }
-.nb-border-thin  { border: 1.5px solid var(--nb-border-color); }
-.nb-border-thick { border: 3px solid var(--nb-border-color); }
-.nb-border-heavy { border: 4px solid var(--nb-border-color); }
+.nb-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  padding-bottom: 0;
+  margin-bottom: 0.9rem;
+  border-bottom: 0;
+}
 
-/* ── Hard Shadows (no blur, offset only) ── */
-.nb-shadow      { box-shadow: 4px 4px 0 0 var(--nb-shadow-color); }
-.nb-shadow-sm   { box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm); }
-.nb-shadow-lg   { box-shadow: 6px 6px 0 0 var(--nb-shadow-color-lg); }
-.nb-shadow-xl   { box-shadow: 8px 8px 0 0 var(--nb-shadow-color-lg); }
+.text-gradient {
+  font-family: var(--font-display), ui-sans-serif, system-ui;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  background: linear-gradient(100deg, #c4b5fd 0%, #f0abfc 45%, #7dd3fc 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
 
-/* Colored accent shadows */
-.nb-shadow-accent { box-shadow: 4px 4px 0 0 var(--card-accent, var(--nb-accent-ai)); }
+/* ── Surfaces ── */
+.nb-border { border: 1px solid var(--glass-border); }
+.nb-border-thin { border: 1px solid var(--glass-border); }
+.nb-border-thick { border: 1px solid var(--glass-border-bright); }
+.nb-border-heavy { border: 2px solid var(--glass-border-bright); }
 
-/* ── Cards (tangible, sticker-like) ── */
+.nb-shadow { box-shadow: 0 24px 50px -30px var(--nb-shadow-color), 0 2px 8px -4px var(--nb-shadow-color-sm); }
+.nb-shadow-sm { box-shadow: 0 12px 28px -18px var(--nb-shadow-color-sm); }
+.nb-shadow-lg { box-shadow: 0 40px 80px -40px var(--nb-shadow-color-lg); }
+.nb-shadow-xl { box-shadow: 0 56px 110px -50px var(--nb-shadow-color-lg); }
+.nb-shadow-accent { box-shadow: 0 18px 40px -22px color-mix(in oklab, var(--card-accent, var(--accent-purple)) 60%, transparent); }
+
 .nb-card {
-  border: 2px solid var(--nb-border-color);
-  box-shadow: 4px 4px 0 0 var(--nb-shadow-color);
-  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 50px -34px var(--nb-shadow-color);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 .nb-card-accent {
-  border: 2px solid var(--card-accent, var(--nb-accent-ai));
-  box-shadow: 4px 4px 0 0 var(--card-accent, var(--nb-accent-ai));
-  border-radius: 16px;
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--card-accent, var(--accent-purple)) 12%, transparent), transparent 60%),
+    var(--glass);
+  border: 1px solid color-mix(in oklab, var(--card-accent, var(--accent-purple)) 26%, var(--glass-border));
+  border-radius: 24px;
+  box-shadow: 0 24px 50px -34px var(--nb-shadow-color);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 .nb-card-sm {
-  border: 2px solid var(--nb-border-color);
-  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
-  border-radius: 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  box-shadow: 0 14px 30px -24px var(--nb-shadow-color-sm);
 }
 .nb-card-accent-sm {
-  border: 2px solid var(--card-accent, var(--nb-accent-ai));
-  box-shadow: 3px 3px 0 0 var(--card-accent, var(--nb-accent-ai));
-  border-radius: 12px;
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--card-accent, var(--accent-purple)) 12%, transparent), transparent 65%),
+    var(--glass);
+  border: 1px solid color-mix(in oklab, var(--card-accent, var(--accent-purple)) 24%, var(--glass-border));
+  border-radius: 18px;
 }
 
-/* ── Buttons (pressable, tactile) ── */
+/* ── Buttons ── */
 .nb-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 44px;
-  padding: 0.625rem 1.25rem;
+  min-height: 46px;
+  padding: 0.625rem 1.05rem;
   font-family: var(--font-display), ui-sans-serif, system-ui;
-  font-weight: 700;
-  font-size: 0.875rem;
-  letter-spacing: -0.01em;
-  border: 2px solid var(--nb-border-color);
-  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
-  border-radius: 12px;
-  background: var(--ink-800);
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: -0.015em;
+  border: 1px solid var(--glass-border-bright);
+  border-radius: 14px;
+  background: var(--glass-strong);
   color: var(--foreground);
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   -webkit-tap-highlight-color: transparent;
 }
-.nb-btn:hover   { transform: translateY(-2px); box-shadow: 5px 5px 0 0 var(--nb-shadow-color); }
-.nb-btn:active  { transform: translateY(2px); box-shadow: 1px 1px 0 0 var(--nb-shadow-color-sm); }
+.nb-btn:hover {
+  background: color-mix(in oklab, var(--glass-strong) 70%, var(--foreground) 10%);
+  border-color: var(--glass-border-bright);
+  transform: translateY(-1px);
+}
+.nb-btn:active { transform: scale(0.97); }
 
 .nb-btn-accent {
-  background: var(--card-accent, var(--nb-accent-ai));
-  border-color: var(--card-accent, var(--nb-accent-ai));
-  color: #0a0a0a;
-  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+  background: linear-gradient(135deg, var(--accent-purple), color-mix(in oklab, var(--accent-purple) 55%, var(--accent-blue)));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 16px 34px -18px color-mix(in oklab, var(--accent-purple) 70%, transparent);
+}
+.nb-btn-accent:hover {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--accent-purple) 88%, white), color-mix(in oklab, var(--accent-blue) 65%, var(--accent-purple)));
+}
+[data-theme="sakura"] .nb-btn-accent,
+[data-theme="paper"] .nb-btn-accent {
+  color: #fff;
 }
 
 .nb-btn-lg {
-  min-height: 52px;
-  padding: 0.75rem 1.75rem;
+  min-height: 54px;
+  padding: 0.8rem 1.5rem;
   font-size: 1rem;
-  box-shadow: 4px 4px 0 0 var(--nb-shadow-color);
+  border-radius: 16px;
 }
 
-/* ── Input (manga encyclopedia style) ── */
+/* ── Inputs ── */
 .nb-input {
   width: 100%;
-  min-height: 48px;
-  padding: 0.625rem 1rem;
-  font-family: var(--font-display), ui-sans-serif, system-ui;
+  min-height: 52px;
+  padding: 0.7rem 1rem;
+  font-family: var(--font-body), ui-sans-serif, system-ui;
   font-size: 1rem;
   font-weight: 500;
-  background: var(--ink-800);
+  line-height: 1.4;
+  background: var(--glass);
   color: var(--foreground);
-  border: 3px solid var(--nb-border-color);
-  border-radius: 12px;
-  box-shadow: 3px 3px 0 0 var(--nb-shadow-color-sm);
+  border: 1px solid var(--glass-border-bright);
+  border-radius: 16px;
   outline: none;
-  transition: box-shadow 0.1s ease;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .nb-input:focus {
-  box-shadow: 5px 5px 0 0 var(--card-accent, var(--nb-accent-ai));
-  border-color: var(--card-accent, var(--nb-accent-ai));
+  border-color: color-mix(in oklab, var(--accent-purple) 65%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent-purple) 18%, transparent);
+  background: var(--glass-strong);
 }
-.nb-input::placeholder { color: rgba(240, 240, 240, 0.35); }
+.nb-input::placeholder { color: color-mix(in oklab, var(--foreground) 38%, transparent); }
 
-/* ── Section Header (magazine style) ── */
-.nb-section-header {
-  font-family: var(--font-display), ui-sans-serif, system-ui;
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: -0.03em;
-  text-transform: uppercase;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
-  border-bottom: 3px solid var(--nb-border-color);
-  display: inline-block;
+select.nb-input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--foreground) 50%), linear-gradient(135deg, var(--foreground) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 2.5rem;
 }
 
-/* ── Badge / Tag ── */
+/* ── Tags ── */
 .nb-tag {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.6875rem;
+  gap: 0.25rem;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
-  border: 1.5px solid var(--nb-border-color);
-  border-radius: 6px;
-  background: var(--ink-700);
+  letter-spacing: 0.07em;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass);
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-/* ── Scoped utility ── */
+/* ── Utilities ── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ── Text gradient (kept for hero only) ── */
-.text-gradient {
-  font-family: var(--font-display), ui-sans-serif, system-ui;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  background: linear-gradient(90deg, var(--nb-accent-ai), var(--nb-accent-recommend), var(--nb-accent-search));
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+.app-dock {
+  background: color-mix(in oklab, var(--ink-900) 72%, transparent);
+  border: 1px solid var(--glass-border-bright);
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
-/* ═══════════════════════════════════════════════
-   THEMES — 12 neobrutalist palettes (6 dark + 3 light + 3 hybrid)
-   ═══════════════════════════════════════════════ */
-
-/* ── Dark Theme: Midnight (deep purple on black) ── */
-[data-theme="midnight"] {
-  --background: #0a0a0a;
-  --foreground: #f0f0f0;
-  --ink-solid: #0a0a0a;
-  --ink-900: #0a0a0a;
-  --ink-800: #141414;
-  --ink-700: #1c1c1c;
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
-  --accent-purple: #7c3aed;
-  --accent-blue: #3b82f6;
-  --accent-crimson: #ef4444;
-  --accent-gold: #f59e0b;
-  --nb-accent-ai: #8b5cf6;
-  --nb-accent-progress: #f97316;
-  --nb-accent-characters: #eab308;
-  --nb-accent-stats: #22c55e;
-  --nb-accent-recommend: #3b82f6;
-  --nb-accent-search: #ec4899;
-  --nb-accent-library: #06b6d4;
-  --nb-accent-quote: #f59e0b;
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
-/* ── Dark Theme: Neobrutalist (candy accents on charcoal + solid off-white hard shadows) ── */
-[data-theme="neobrutalist"] {
-  --background: #0e0e10;
-  --foreground: #f5f5f0;
-  --ink-solid: #0e0e10;
-  --ink-900: #0e0e10;
-  --ink-800: #17171a;
-  --ink-700: #1e1e22;
-  --nb-border-color: #f5f5f0;
-  --nb-border-color-dim: rgba(245, 245, 240, 0.7);
-  --nb-shadow-color: #f5f5f0;
-  --nb-shadow-color-sm: #f5f5f0;
-  --nb-shadow-color-lg: #f5f5f0;
-  --accent-purple: #c4b5fd;
-  --accent-blue: #8ec5ff;
-  --accent-crimson: #ff6b5e;
-  --accent-gold: #ffd84d;
-  --nb-accent-ai: #c4b5fd;
-  --nb-accent-progress: #ff6b5e;
-  --nb-accent-characters: #ffd84d;
-  --nb-accent-stats: #5eead4;
-  --nb-accent-recommend: #8ec5ff;
-  --nb-accent-search: #ff9dd6;
-  --nb-accent-library: #b8f14a;
-  --nb-accent-quote: #ffd84d;
+.glow-ring {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-purple) 40%, transparent), 0 0 40px -12px color-mix(in oklab, var(--accent-purple) 55%, transparent);
 }
 
-/* ── Light Theme: Neobrutalist Light (cream bg + black hard shadows + candy card fills) ── */
-[data-theme="neobrutalist-light"] {
-  --background: #f4efe1;
-  --foreground: #141210;
-  --ink-solid: #f4efe1;
-  --ink-900: #f4efe1;
-  --ink-800: #ffffff;
-  --ink-700: #fbf6ea;
-  --nb-border-color: #141210;
-  --nb-border-color-dim: rgba(20, 18, 16, 0.75);
-  --nb-shadow-color: #141210;
-  --nb-shadow-color-sm: #141210;
-  --nb-shadow-color-lg: #141210;
-  --accent-purple: #7c3aed;
-  --accent-blue: #2563eb;
-  --accent-crimson: #e11d48;
-  --accent-gold: #b8860b;
-  /* Candy fills — used as card BACKGROUND in light mode (see accent-fill block below) */
-  --nb-accent-ai: #c4b5fd;
-  --nb-accent-progress: #ff6b5e;
-  --nb-accent-characters: #ffd84d;
-  --nb-accent-stats: #5eead4;
-  --nb-accent-recommend: #8ec5ff;
-  --nb-accent-search: #ff9dd6;
-  --nb-accent-library: #b8f14a;
-  --nb-accent-quote: #ffd84d;
+.poster-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--glass-border);
+  background: var(--ink-700);
+  box-shadow: 0 20px 40px -26px rgba(0, 0, 0, 0.85);
+}
+.poster-frame img { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.group:hover .poster-frame img,
+.poster-frame:hover img { transform: scale(1.05); }
+
+.media-fade {
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
 }
 
-/* ── Dark Theme: Sakura (cherry blossom pink) ── */
-[data-theme="sakura"] {
-  --background: #0d080c;
-  --foreground: #fce7f3;
-  --ink-solid: #0d080c;
-  --ink-900: #0d080c;
-  --ink-800: #170e14;
-  --ink-700: #1f141c;
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
-  --accent-purple: #c084fc;
-  --accent-blue: #818cf8;
-  --accent-crimson: #fb7185;
-  --accent-gold: #fbbf24;
-  --nb-accent-ai: #f472b6;
-  --nb-accent-progress: #fb7185;
-  --nb-accent-characters: #fbbf24;
-  --nb-accent-stats: #a3e635;
-  --nb-accent-recommend: #c084fc;
-  --nb-accent-search: #f472b6;
-  --nb-accent-library: #67e8f9;
-  --nb-accent-quote: #fbbf24;
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  border-radius: 18px;
+  background: linear-gradient(90deg, var(--glass) 25%, var(--glass-strong) 50%, var(--glass) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
 }
 
-/* ── Dark Theme: Cyber (cyan neon on black) ── */
-[data-theme="cyber"] {
-  --background: #0a0f12;
-  --foreground: #ecfeff;
-  --ink-solid: #0a0f12;
-  --ink-900: #0a0f12;
-  --ink-800: #0f161a;
-  --ink-700: #141c22;
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
-  --accent-purple: #c084fc;
-  --accent-blue: #22d3ee;
-  --accent-crimson: #f87171;
-  --accent-gold: #facc15;
-  --nb-accent-ai: #c084fc;
-  --nb-accent-progress: #22d3ee;
-  --nb-accent-characters: #facc15;
-  --nb-accent-stats: #34d399;
-  --nb-accent-recommend: #38bdf8;
-  --nb-accent-search: #f472b6;
-  --nb-accent-library: #22d3ee;
-  --nb-accent-quote: #facc15;
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.85; }
+}
+.pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+/* Hide native scrollbar globally only on small screens */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar { display: none; }
 }
 
-/* ── Dark Theme: Gold (warm amber on dark) ── */
-[data-theme="gold"] {
-  --background: #0e0d0a;
-  --foreground: #fefce8;
-  --ink-solid: #0e0d0a;
-  --ink-900: #0e0d0a;
-  --ink-800: #171510;
-  --ink-700: #1f1c14;
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
-  --accent-purple: #c084fc;
-  --accent-blue: #60a5fa;
-  --accent-crimson: #f87171;
-  --accent-gold: #f5c518;
-  --nb-accent-ai: #c084fc;
-  --nb-accent-progress: #f5c518;
-  --nb-accent-characters: #facc15;
-  --nb-accent-stats: #4ade80;
-  --nb-accent-recommend: #60a5fa;
-  --nb-accent-search: #f472b6;
-  --nb-accent-library: #38bdf8;
-  --nb-accent-quote: #f5c518;
+/* ── Light themes: legacy white utilities ── */
+:where([data-theme="sakura"], [data-theme="paper"]) .text-white {
+  color: var(--foreground);
+}
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="text-white/"] {
+  color: color-mix(in oklab, var(--foreground) 66%, transparent);
+}
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="bg-white/"] {
+  background: var(--glass-strong);
+}
+:where([data-theme="sakura"], [data-theme="paper"]) [class*="border-white/"] {
+  border-color: var(--glass-border-bright);
+}
+:where([data-theme="sakura"], [data-theme="paper"]) .nb-btn-accent .text-white {
+  color: #fff;
 }
 
-/* ── Dark Theme: Mono (grayscale, stark) ── */
-[data-theme="mono"] {
-  --background: #0a0a0a;
-  --foreground: #e5e5e5;
-  --ink-solid: #0a0a0a;
-  --ink-900: #0a0a0a;
-  --ink-800: #141414;
-  --ink-700: #1c1c1c;
-  --nb-border-color: #f0f0f0;
-  --nb-border-color-dim: rgba(240, 240, 240, 0.7);
-  --nb-shadow-color: rgba(240, 240, 240, 0.85);
-  --nb-shadow-color-sm: rgba(240, 240, 240, 0.80);
-  --nb-shadow-color-lg: rgba(240, 240, 240, 0.85);
-  --accent-purple: #a3a3a3;
-  --accent-blue: #a3a3a3;
-  --accent-crimson: #d4d4d4;
-  --accent-gold: #e5e5e5;
-  --nb-accent-ai: #d4d4d4;
-  --nb-accent-progress: #d4d4d4;
-  --nb-accent-characters: #e5e5e5;
-  --nb-accent-stats: #a3a3a3;
-  --nb-accent-recommend: #d4d4d4;
-  --nb-accent-search: #a3a3a3;
-  --nb-accent-library: #d4d4d4;
-  --nb-accent-quote: #e5e5e5;
+/* ── Range styling (used by player) ── */
+input[type="range"].aa-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
 }
-
-/* ── Dark Theme: Neon (cyberpunk neons on ultra-black) ── */
-[data-theme="neon"] {
-  --background: #050508;
-  --foreground: #f0f0f0;
-  --ink-solid: #050508;
-  --ink-900: #080810;
-  --ink-800: #0d0d18;
-  --ink-700: #121222;
-  --nb-border-color: #ff00ff;
-  --nb-border-color-dim: rgba(255, 0, 255, 0.7);
-  --nb-shadow-color: rgba(255, 0, 255, 0.85);
-  --nb-shadow-color-sm: rgba(255, 0, 255, 0.7);
-  --nb-shadow-color-lg: rgba(255, 0, 255, 0.75);
-  --accent-purple: #ff00ff;
-  --accent-blue: #00ffff;
-  --accent-crimson: #ff3333;
-  --accent-gold: #ffff00;
-  --nb-accent-ai: #ff00ff;
-  --nb-accent-progress: #00ffff;
-  --nb-accent-characters: #ffff00;
-  --nb-accent-stats: #00ff66;
-  --nb-accent-recommend: #ff6600;
-  --nb-accent-search: #ff00ff;
-  --nb-accent-library: #00ffff;
-  --nb-accent-quote: #ffff00;
+input[type="range"].aa-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
 }
-
-/* ── Dark Theme: Retro (synthwave 80s) ── */
-[data-theme="retro"] {
-  --background: #0a0a14;
-  --foreground: #f8e8ff;
-  --ink-solid: #0a0a14;
-  --ink-900: #0f0f1e;
-  --ink-800: #151528;
-  --ink-700: #1a1a32;
-  --nb-border-color: #ff6b9d;
-  --nb-border-color-dim: rgba(255, 107, 157, 0.7);
-  --nb-shadow-color: rgba(255, 107, 157, 0.85);
-  --nb-shadow-color-sm: rgba(255, 107, 157, 0.7);
-  --nb-shadow-color-lg: rgba(255, 107, 157, 0.75);
-  --accent-purple: #c061cb;
-  --accent-blue: #6be4ff;
-  --accent-crimson: #ff6b9d;
-  --accent-gold: #ffd700;
-  --nb-accent-ai: #c061cb;
-  --nb-accent-progress: #ff6b9d;
-  --nb-accent-characters: #ffd700;
-  --nb-accent-stats: #6be4ff;
-  --nb-accent-recommend: #ff6b9d;
-  --nb-accent-search: #c061cb;
-  --nb-accent-library: #6be4ff;
-  --nb-accent-quote: #ffd700;
+input[type="range"].aa-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  margin-top: -5px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
-
-/* ── Dark Theme: Obsidian (minimal, premium black + emerald) ── */
-[data-theme="obsidian"] {
-  --background: #000000;
-  --foreground: #e0e0e0;
-  --ink-solid: #000000;
-  --ink-900: #050505;
-  --ink-800: #0a0a0a;
-  --ink-700: #111111;
-  --nb-border-color: #2dd4bf;
-  --nb-border-color-dim: rgba(45, 212, 191, 0.7);
-  --nb-shadow-color: rgba(45, 212, 191, 0.85);
-  --nb-shadow-color-sm: rgba(45, 212, 191, 0.65);
-  --nb-shadow-color-lg: rgba(45, 212, 191, 0.75);
-  --accent-purple: #a78bfa;
-  --accent-blue: #2dd4bf;
-  --accent-crimson: #f87171;
-  --accent-gold: #fbbf24;
-  --nb-accent-ai: #a78bfa;
-  --nb-accent-progress: #2dd4bf;
-  --nb-accent-characters: #fbbf24;
-  --nb-accent-stats: #34d399;
-  --nb-accent-recommend: #818cf8;
-  --nb-accent-search: #f472b6;
-  --nb-accent-library: #22d3ee;
-  --nb-accent-quote: #fbbf24;
+input[type="range"].aa-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
 }
-
-/* ── Light Theme: Paper (premium cream + black borders + vibrant accents) ── */
-[data-theme="paper"] {
-  --background: #f8f5f0;
-  --foreground: #0a0a0a;
-  --ink-solid: #f8f5f0;
-  --ink-900: #f8f5f0;
-  --ink-800: #ffffff;
-  --ink-700: #efe9e0;
-  --nb-border-color: #0a0a0a;
-  --nb-border-color-dim: rgba(10, 10, 10, 0.8);
-  --nb-shadow-color: rgba(10, 10, 10, 0.9);
-  --nb-shadow-color-sm: rgba(10, 10, 10, 0.85);
-  --nb-shadow-color-lg: rgba(10, 10, 10, 0.8);
-  --accent-purple: #7c3aed;
-  --accent-blue: #2563eb;
-  --accent-crimson: #dc2626;
-  --accent-gold: #d97706;
-  --nb-accent-ai: #7c3aed;
-  --nb-accent-progress: #ea580c;
-  --nb-accent-characters: #ca8a04;
-  --nb-accent-stats: #059669;
-  --nb-accent-recommend: #2563eb;
-  --nb-accent-search: #db2777;
-  --nb-accent-library: #0891b2;
-  --nb-accent-quote: #d97706;
-}
-
-/* ── Light Theme: Mint (fresh white + teal borders) ── */
-[data-theme="mint"] {
-  --background: #f4faf8;
-  --foreground: #0d1f17;
-  --ink-solid: #f4faf8;
-  --ink-900: #f4faf8;
-  --ink-800: #ffffff;
-  --ink-700: #e8f5ee;
-  --nb-border-color: #0d9488;
-  --nb-border-color-dim: rgba(13, 148, 136, 0.8);
-  --nb-shadow-color: rgba(13, 148, 136, 0.85);
-  --nb-shadow-color-sm: rgba(13, 148, 136, 0.75);
-  --nb-shadow-color-lg: rgba(13, 148, 136, 0.7);
-  --accent-purple: #8b5cf6;
-  --accent-blue: #0d9488;
-  --accent-crimson: #ef4444;
-  --accent-gold: #f59e0b;
-  --nb-accent-ai: #8b5cf6;
-  --nb-accent-progress: #ea580c;
-  --nb-accent-characters: #eab308;
-  --nb-accent-stats: #10b981;
-  --nb-accent-recommend: #0d9488;
-  --nb-accent-search: #ec4899;
-  --nb-accent-library: #06b6d4;
-  --nb-accent-quote: #f59e0b;
-}
-
-/* ── Light Theme: Coral (warm cream + coral/pink) ── */
-[data-theme="coral"] {
-  --background: #fef6f4;
-  --foreground: #1a0d0a;
-  --ink-solid: #fef6f4;
-  --ink-900: #fef6f4;
-  --ink-800: #ffffff;
-  --ink-700: #f8ece8;
-  --nb-border-color: #e11d48;
-  --nb-border-color-dim: rgba(225, 29, 72, 0.8);
-  --nb-shadow-color: rgba(225, 29, 72, 0.85);
-  --nb-shadow-color-sm: rgba(225, 29, 72, 0.75);
-  --nb-shadow-color-lg: rgba(225, 29, 72, 0.7);
-  --accent-purple: #a21caf;
-  --accent-blue: #2563eb;
-  --accent-crimson: #e11d48;
-  --accent-gold: #d97706;
-  --nb-accent-ai: #a21caf;
-  --nb-accent-progress: #e11d48;
-  --nb-accent-characters: #f59e0b;
-  --nb-accent-stats: #059669;
-  --nb-accent-recommend: #2563eb;
-  --nb-accent-search: #db2777;
-  --nb-accent-library: #0891b2;
-  --nb-accent-quote: #d97706;
-}
-
-/* ═══════════════════════════════════════════════
-   NEOBRUTALIST AUTO-APPLY — scoped, low-specificity
-   Brings the nb-* treatment to legacy generic utility
-   classes (bg-ink-*, rounded-full, text-white/*, …)
-   without touching component markup. Uses :where() so
-   any per-element utility class still wins.
-   ═══════════════════════════════════════════════ */
-:where([data-theme="neobrutalist"], [data-theme="neobrutalist-light"]) {
-
-  /* NOTE: no broad rule borders every .bg-ink-800/.bg-ink-700 surface — that
-     is what caused "border soup" (section wrapper + inner card both bordered).
-     Cards get their border/shadow explicitly via .nb-card / .nb-card-sm /
-     .nb-card-accent / .nb-card-accent-sm on the LEAF element only. */
-
-  /* Buttons / pill chips / circular icon buttons */
-  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb) {
-    border: 2.5px solid var(--nb-border-color);
-    box-shadow: 3px 3px 0 0 var(--nb-shadow-color);
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
-  }
-  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb):hover {
-    transform: translateY(-2px);
-    box-shadow: 5px 5px 0 0 var(--nb-shadow-color);
-  }
-  :where(button.rounded-full, button.rounded-xl, a.rounded-full):not(.no-nb):active {
-    transform: translateY(2px);
-    box-shadow: 1px 1px 0 0 var(--nb-shadow-color);
-  }
-
-  /* Inputs */
-  input {
-    border: 2.5px solid var(--nb-border-color);
-    box-shadow: 3px 3px 0 0 var(--nb-shadow-color);
-    border-radius: 12px;
-  }
-
-  /* Headings */
-  :where(h1, h2, .text-gradient) {
-    font-family: var(--font-display), ui-sans-serif, system-ui;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-  }
-
-  /* Bottom nav */
-  nav.fixed.bottom-0 {
-    background: var(--ink-900);
-    border-top: 2.5px solid var(--nb-border-color);
-    backdrop-filter: none;
-  }
-  nav.fixed.bottom-0 a[class*="bg-ink-solid"] {
-    background: var(--card-accent, var(--nb-accent-ai));
-    border: 2px solid var(--nb-border-color);
-    color: var(--ink-solid);
-  }
-}
-
-/* ── Light-theme text/surface legibility overrides ── */
-:where([data-theme="neobrutalist-light"]) {
-  .text-white { color: #141210; }
-  [class*="text-white/"] { color: #141210; }
-  [class*="bg-white/"] { background: #fbf6ea; }
-  [class*="border-white/"] { border-color: #141210; }
-
-  /* Candy card fills: accent-coded cards become solid color blocks with
-     ink borders/shadows/text, matching the reference's "colored sticker"
-     look, instead of just a colored outline on a white card. */
-  :where(.nb-card-accent, .nb-card-accent-sm) {
-    background: var(--card-accent, var(--nb-accent-ai));
-    border-color: #141210;
-    color: #141210;
-  }
-  .nb-card-accent { box-shadow: 4px 4px 0 0 #141210; }
-  .nb-card-accent-sm { box-shadow: 3px 3px 0 0 #141210; }
-  :where(.nb-card-accent, .nb-card-accent-sm) .text-white,
-  :where(.nb-card-accent, .nb-card-accent-sm) [class*="text-white/"] {
-    color: #141210;
-  }
+input[type="range"].aa-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
 }

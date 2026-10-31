@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Anime Attack
 
-## Getting Started
+A premium, glass-UI anime streaming and manga reading app built with Next.js 15, React 19 and Tailwind 4.
+Sub/dub streaming with a fully custom player, season navigation, a vertical manga reader, and five themes.
 
-First, run the development server:
+## Highlights
+
+- **Custom HLS player** — quality switching (auto + per-bitrate), subtitle tracks, playback speed, PiP,
+  fullscreen, ±10s skip, buffered bar, keyboard shortcuts, resume and progress saving.
+- **Reliable streaming pipeline** — resolves episodes through the aniwatch player into the megavid source
+  API, fails over across four providers, and proxies playlists so CORS and content-type quirks cannot
+  break playback.
+- **Season navigation** — AniList `Media.relations` powers a Season 1 → N switcher on every detail page.
+- **Manga reader** — MangaDex search, hosted-chapter reader with HD/Lite modes, proxied images, and
+  honest handling of licensed titles that only have official external links.
+- **Five themes** — `midnight`, `obsidian`, `neon`, `sakura`, `paper`, with no flash of unstyled theme.
+- **Discovery** — trending, top airing, movies, browse with filters, airing schedule, characters, library.
+
+## Stack
+
+Next.js 15.5 · React 19 · TypeScript · Tailwind CSS 4 · TanStack Query · framer-motion · hls.js ·
+three.js · zod · vitest
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Production check:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm run start -- -p 3100
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Optional environment (`.env.local`):
 
-## Learn More
+| Variable | Purpose |
+| --- | --- |
+| `GEMINI_API_KEY` | Enables the AI recap / Q&A panel. Without it the panel degrades gracefully. |
 
-To learn more about Next.js, take a look at the following resources:
+## Project layout
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/                     routes (App Router) + API route handlers
+  api/anime/source/      episode source resolution (provider failover)
+  api/proxy/media/       HLS playlist rewriting, segments, SRT→VTT
+  api/manga/             search, detail, chapter feed, image proxy
+components/player/       custom video player
+components/screens/      page-level views (home, detail, watch, browse, …)
+components/manga/        manga browser, detail, reader
+lib/anime/               AniList, Jikan, Kitsu, aniwatch + megavid pipeline
+lib/manga/               MangaDex data layer
+docs/STREAMING-APIS.md   full API research, contracts and APK reuse notes
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Documentation
 
-## Deploy on Vercel
+- [`docs/STREAMING-APIS.md`](docs/STREAMING-APIS.md) — every upstream API, tested endpoint contracts,
+  provider behaviour, failure modes and how to reuse the pipeline from a mobile client.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project resolves third-party streams and does not host any media. Licensed manga is surfaced only
+as links to official publishers. Episode availability, quality and subtitle tracks depend entirely on
+upstream providers. See the caveats section of the API document.
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint |
+| `npx vitest run` | Unit tests |

@@ -21,18 +21,24 @@ const API_BASE = `${BASE_URL}/wp-json/wp/v2`;
 const PROXY_BASE = "/api/proxy/aniwatch";
 const IS_BROWSER = typeof window !== "undefined";
 
-/**
- * Helper to fetch a URL — routes through Next.js API proxy in the browser
- * to bypass CORS, or fetches directly on the server.
- */
+function deriveReferer(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return REFERER;
+  }
+}
+
 async function proxiedFetch(input: string, init?: RequestInit): Promise<Response> {
+  const referer = deriveReferer(input);
   if (IS_BROWSER) {
-    const proxyUrl = `${PROXY_BASE}?url=${encodeURIComponent(input)}`;
+    const proxyUrl = `${PROXY_BASE}?url=${encodeURIComponent(input)}&ref=${encodeURIComponent(referer)}`;
     return fetch(proxyUrl, init);
   }
   return fetch(input, {
     ...init,
-    headers: { ...init?.headers, "User-Agent": USER_AGENT, Referer: REFERER },
+    headers: { ...init?.headers, "User-Agent": USER_AGENT, Referer: referer },
   } as RequestInit);
 }
 

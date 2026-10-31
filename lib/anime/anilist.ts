@@ -1,6 +1,6 @@
-import { mapCharacterEdge, mapMediaToAnime, mapMediaToSummary } from "./anilist-map";
+import { mapCharacterEdge, mapMediaToAnime, mapMediaToSummary, mapRelationEdge } from "./anilist-map";
 import * as Q from "./queries";
-import type { Anime, AnimeSummary, Character } from "./types";
+import type { Anime, AnimeSummary, Character, RelatedAnime } from "./types";
 
 const ENDPOINT = "https://graphql.anilist.co";
 type Rec = Record<string, any>;
@@ -33,3 +33,26 @@ export const getRecommendations = (id: number): Promise<AnimeSummary[]> =>
   anilistFetch<Rec>(Q.RECOMMENDATIONS, { id }).then((d) =>
     (d?.Media?.recommendations?.nodes ?? [])
       .map((n: Rec) => n.mediaRecommendation).filter(Boolean).map(mapMediaToSummary));
+
+/** Relation types that make sense as "seasons" in the switcher. */
+const SEASON_TYPES = new Set(["PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "ALTERNATIVE", "SPIN_OFF"]);
+
+export const getRelations = (id: number): Promise<RelatedAnime[]> =>
+  anilistFetch<Rec>(Q.RELATIONS, { id })
+    .then((d) =>
+      (d?.Media?.relations?.edges ?? [])
+        .filter((e: Rec) => {
+          const node = e?.node;
+          return (
+            node?.type === "ANIME" &&
+            SEASON_TYPES.has(e?.relationType) &&
+            // Avoid music videos / character specials cluttering the switcher.
+            node?.format !== "MUSIC"
+          );
+        })
+        .map(mapRelationEdge),
+    )
+    // Oldest first so the row reads Season 1 → N.
+    .then((list) =>
+      list.sort((a: RelatedAnime, b: RelatedAnime) => (a.year ?? 9999) - (b.year ?? 9999) || a.id - b.id),
+    );
