@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getChapter } from "@/lib/manga/source";
 import { isWcChapterId } from "@/lib/manga/weebcentral";
+import { isMrChapterId } from "@/lib/manga/mangaread";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -10,7 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  if (!/^[a-f0-9-]{36}$/i.test(id) && !isWcChapterId(id)) {
+  if (!/^[a-f0-9-]{36}$/i.test(id) && !isWcChapterId(id) && !isMrChapterId(id)) {
     return NextResponse.json({ error: "Invalid chapter id" }, { status: 400 });
   }
   try {

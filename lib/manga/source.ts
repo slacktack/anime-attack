@@ -1,8 +1,7 @@
 import { getMangaDetail, getReaderData } from "./mangadex";
 import { isWcChapterId, parseWcChapterId, wcChapterId, wcChapters, wcFindSeries, wcPages } from "./weebcentral";
-import type { MangaChapter, MangaDetail, MangaReaderData } from "./types";
-
-const isHosted = (c: MangaChapter) => (c.pages > 0 || c.source === "weebcentral") && !c.externalUrl;
+import { isMrChapterId, mrChapterId, mrFindSeries, mrPages, parseMrChapterId } from "./mangaread";
+import { isHostedChapter as isHosted, type MangaChapter, type MangaDetail, type MangaReaderData } from "./types";
 
 function byNumberDesc(a: MangaChapter, b: MangaChapter) {
   const av = Number.parseFloat(a.chapter ?? "");
@@ -13,48 +12,63 @@ function byNumberDesc(a: MangaChapter, b: MangaChapter) {
   return bv - av;
 }
 
-// MangaDex where it hosts pages, WeebCentral for licensed/external-only or truncated runs.
+async function weebcentralChapters(id: string, detail: MangaDetail): Promise<MangaChapter[]> {
+  const seriesId = await wcFindSeries({
+    key: id,
+    titles: [detail.title, ...detail.altTitles],
+    anilistId: detail.anilistId,
+  });
+  if (!seriesId) return [];
+  const wc = await wcChapters(seriesId);
+  return wc.map((w) => ({
+    id: wcChapterId(w.id, id),
+    chapter: w.number,
+    volume: null,
+    title: /^chapter\s+[\d.]+$/i.test(w.label) ? null : w.label,
+    pages: 0,
+    group: null,
+    publishAt: w.date,
+    externalUrl: null,
+    source: "weebcentral" as const,
+  }));
+}
+
+async function mangareadChapters(id: string, detail: MangaDetail): Promise<MangaChapter[]> {
+  const series = await mrFindSeries({ key: id, titles: [detail.title, ...detail.altTitles] });
+  if (!series) return [];
+  return series.chapters.map((c) => ({
+    id: mrChapterId(series.slug, c.slug, id),
+    chapter: c.number,
+    volume: null,
+    title: /^chapter\s+[\d.]+$/i.test(c.label) ? null : c.label,
+    pages: 0,
+    group: null,
+    publishAt: c.date,
+    externalUrl: null,
+    source: "mangaread" as const,
+  }));
+}
+
+// MangaDex where it hosts pages, then WeebCentral, then MangaRead (WeebCentral blocks datacenter IPs).
 export async function getMangaFull(id: string): Promise<MangaDetail> {
   const detail = await getMangaDetail(id);
-  // Always merge: MangaDex often hosts only a handful of chapters (Komi, Mushoku Tensei).
-
-  let seriesId: string | null = null;
-  try {
-    seriesId = await wcFindSeries({
-      key: id,
-      titles: [detail.title, ...detail.altTitles],
-      anilistId: detail.anilistId,
-    });
-  } catch {
-    seriesId = null;
-  }
-  if (!seriesId) return { ...detail, chapters: detail.chapters.map((c) => ({ ...c, source: "mangadex" as const })) };
-
-  let wc: Awaited<ReturnType<typeof wcChapters>> = [];
-  try {
-    wc = await wcChapters(seriesId);
-  } catch {
-    return detail;
-  }
+  const [wc, mr] = await Promise.all([
+    weebcentralChapters(id, detail).catch(() => [] as MangaChapter[]),
+    mangareadChapters(id, detail).catch(() => [] as MangaChapter[]),
+  ]);
 
   const merged = new Map<string, MangaChapter>();
   for (const c of detail.chapters) {
     if (isHosted(c)) merged.set(c.chapter ?? c.id, { ...c, source: "mangadex" });
   }
-  for (const w of wc) {
-    const key = w.number ?? w.id;
-    if (merged.has(key)) continue;
-    merged.set(key, {
-      id: wcChapterId(w.id, id),
-      chapter: w.number,
-      volume: null,
-      title: /^chapter\s+[\d.]+$/i.test(w.label) ? null : w.label,
-      pages: 0,
-      group: null,
-      publishAt: w.date,
-      externalUrl: null,
-      source: "weebcentral",
-    });
+  for (const c of [...wc, ...mr]) {
+    const key = c.chapter ?? c.id;
+    if (!merged.has(key)) merged.set(key, c);
+  }
+  // keep MangaDex's external-only rows visible (locked) when nobody hosts them
+  for (const c of detail.chapters) {
+    const key = c.chapter ?? c.id;
+    if (!merged.has(key)) merged.set(key, { ...c, source: "mangadex" });
   }
   return { ...detail, chapters: [...merged.values()].sort(byNumberDesc) };
 }
@@ -74,6 +88,24 @@ export async function getChapter(chapterId: string): Promise<MangaReaderData> {
   if (isWcChapterId(chapterId)) {
     const parsed = parseWcChapterId(chapterId)!;
     const [pages, full] = await Promise.all([wcPages(parsed.ulid), getMangaFull(parsed.mangaId)]);
+    const entry = full.chapters.find((c) => c.id === chapterId);
+    const urls = pages.map(proxied);
+    return {
+      chapterId,
+      mangaId: parsed.mangaId,
+      mangaTitle: full.title,
+      chapter: entry?.chapter ?? null,
+      volume: null,
+      title: entry?.title ?? null,
+      pages: urls,
+      saverPages: urls,
+      ...navFrom(full.chapters, chapterId),
+    };
+  }
+  if (isMrChapterId(chapterId)) {
+    const parsed = parseMrChapterId(chapterId)!;
+    const [pages, full] = await Promise.all([mrPages(parsed.slug, parsed.chapter), getMangaFull(parsed.mangaId)]);
+    if (pages.length === 0) throw new Error("No pages found for this chapter");
     const entry = full.chapters.find((c) => c.id === chapterId);
     const urls = pages.map(proxied);
     return {

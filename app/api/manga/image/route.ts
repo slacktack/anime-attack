@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const UA = "AnimeAttack/1.0 (https://github.com/slacktack/anime-attack)";
-const ALLOWED_HOSTS = ["uploads.mangadex.org", "mangadex.org", "mangadex.network", "planeptune.us", "compsci88.com"];
+const ALLOWED_HOSTS = ["uploads.mangadex.org", "mangadex.org", "mangadex.network", "planeptune.us", "compsci88.com", "mangaread.org"];
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
@@ -12,6 +12,7 @@ function headersFor(host: string): Record<string, string> {
   if (host.endsWith("planeptune.us") || host.endsWith("compsci88.com")) {
     return { "User-Agent": BROWSER_UA, Referer: "https://weebcentral.com/" };
   }
+  if (host.endsWith("mangaread.org")) return { "User-Agent": BROWSER_UA, Referer: "https://www.mangaread.org/" };
   return { "User-Agent": UA, Referer: "https://mangadex.org/" };
 }
 

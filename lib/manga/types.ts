@@ -19,8 +19,11 @@ export type MangaChapter = {
   group: string | null;
   publishAt: string | null;
   externalUrl: string | null;
-  source?: "mangadex" | "weebcentral";
+  source?: "mangadex" | "weebcentral" | "mangaread";
 };
+
+export const isHostedChapter = (c: MangaChapter) =>
+  (c.pages > 0 || c.source === "weebcentral" || c.source === "mangaread") && !c.externalUrl;
 
 export type MangaDetail = MangaCard & {
   authors: string[];

@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpDown, BookOpen, Lock, Play, Search } from "lucide-react";
-import type { MangaChapter, MangaDetail } from "@/lib/manga/types";
-
-const isReadable = (c: MangaChapter) => (c.pages > 0 || c.source === "weebcentral") && !c.externalUrl;
+import { isHostedChapter as isReadable, type MangaChapter, type MangaDetail } from "@/lib/manga/types";
 
 export function lastReadKey(mangaId: string) {
   return `ac:manga-last:${mangaId}`;
