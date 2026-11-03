@@ -106,6 +106,8 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   const [showResumed, setShowResumed] = useState(false);
   const forceRefresh = useRef(false);
   const tried = useRef(new Set<string>());
+  const refreshes = useRef(0);
+  const [recovering, setRecovering] = useState(false);
 
   const stream = useQuery({
     queryKey: ["stream", slug, malId, episode, audio, provider, refreshTick],
@@ -224,6 +226,11 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
     tried.current = new Set();
   }, [slug, episode, audio, refreshTick]);
 
+  useEffect(() => {
+    refreshes.current = 0;
+    setRecovering(false);
+  }, [slug, episode, audio]);
+
   const src = useMemo(() => {
     if (!data?.source) return null;
     return proxiedMedia(data.source, fullProxy ? "full" : "smart");
@@ -234,8 +241,13 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
     [data?.tracks],
   );
 
-  // smart → full → next untried provider → hard error
-  const handleFatal = useCallback(() => {
+  // smart → full → next untried provider → fresh signed URL → hard error
+  const handleFatal = useCallback((time: number) => {
+    if (time > 5) {
+      setStartAt(time);
+      setResumed(true);
+      setRecovering(true);
+    }
     if (!fullProxy) {
       setFullProxy(true);
       return;
@@ -250,6 +262,13 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
     if (next) {
       tried.current.add(next);
       setProvider(next);
+      return;
+    }
+    // signed megavid URLs expire mid-film; one re-resolve usually fixes it
+    if (refreshes.current < 2) {
+      refreshes.current += 1;
+      forceRefresh.current = true;
+      setRefreshTick((tick) => tick + 1);
       return;
     }
     setHardError(true);
@@ -273,6 +292,7 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   );
 
   const retry = () => {
+    refreshes.current = 0;
     forceRefresh.current = true;
     setHardError(false);
     setFullProxy(false);
@@ -311,6 +331,7 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
               title={`${showTitle}${epNumber ? ` · Episode ${epNumber}` : ""}`}
               tracks={tracks}
               startAt={resumed ? startAt : 0}
+              autoPlay={recovering}
               onFatal={handleFatal}
               onProgress={handleProgress}
             />

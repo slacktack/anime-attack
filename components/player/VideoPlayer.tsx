@@ -42,7 +42,8 @@ type Props = {
   tracks: PlayerTrack[];
   startAt?: number;
   title?: string;
-  onFatal: () => void;
+  autoPlay?: boolean;
+  onFatal: (time: number) => void;
   onProgress?: (time: number, duration: number) => void;
   onReady?: () => void;
   onWaiting?: () => void;
@@ -73,6 +74,7 @@ export function VideoPlayer({
   kind,
   tracks,
   startAt = 0,
+  autoPlay = false,
   title,
   onFatal,
   onProgress,
@@ -188,6 +190,7 @@ export function VideoPlayer({
     let hls: Hls | null = null;
     let networkRetries = 0;
     let mediaRetries = 0;
+    const fatal = () => onFatalRef.current(video.currentTime || 0);
 
     resumed.current = false;
     levelsRef.current = [];
@@ -213,9 +216,11 @@ export function VideoPlayer({
             maxMaxBufferLength: 90,
             maxBufferSize: 80 * 1024 * 1024,
             startLevel: -1,
-            fragLoadingMaxRetry: 4,
-            manifestLoadingMaxRetry: 3,
-            levelLoadingMaxRetry: 3,
+            fragLoadingMaxRetry: 6,
+            fragLoadingRetryDelay: 600,
+            manifestLoadingMaxRetry: 4,
+            levelLoadingMaxRetry: 4,
+            nudgeMaxRetry: 10,
           });
           hlsRef.current = hls;
 
@@ -245,30 +250,45 @@ export function VideoPlayer({
             if (found) setEffectiveHeight(found.height);
           });
 
+          // budgets refill once playback moves again, so long films survive many blips
+          hls.on(HlsLib.Events.FRAG_BUFFERED, () => {
+            networkRetries = 0;
+            mediaRetries = 0;
+          });
+
           hls.on(HlsLib.Events.ERROR, (_event: unknown, data: ErrorData) => {
-            if (!data.fatal) return;
-            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR && networkRetries < 2) {
+            if (!data.fatal || cancelled) return;
+            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR && networkRetries < 6) {
               networkRetries += 1;
               window.setTimeout(() => {
-                if (!cancelled) hls?.startLoad();
-              }, 800 * networkRetries);
+                if (!cancelled) hls?.startLoad(video.currentTime || -1);
+              }, Math.min(800 * 2 ** (networkRetries - 1), 8000));
               return;
             }
-            if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR && mediaRetries < 2) {
+            if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR && mediaRetries < 4) {
               mediaRetries += 1;
+              if (mediaRetries === 2) hls?.swapAudioCodec();
+              // a corrupt fragment keeps failing: hop past it
+              if (mediaRetries >= 3 && data.frag) {
+                video.currentTime = Math.max(video.currentTime, data.frag.start + data.frag.duration + 0.1);
+              }
               hls?.recoverMediaError();
               return;
             }
-            onFatalRef.current();
+            fatal();
           });
 
           hls.loadSource(src);
           hls.attachMedia(video);
+          if (autoPlay) {
+            hls.once(HlsLib.Events.MANIFEST_PARSED, () => void video.play().catch(() => {}));
+          }
         } else {
           video.src = src;
+          if (autoPlay) void video.play().catch(() => {});
         }
       } catch {
-        if (!cancelled) onFatalRef.current();
+        if (!cancelled) fatal();
       }
     };
 
@@ -429,7 +449,10 @@ export function VideoPlayer({
           setVolume(event.currentTarget.volume);
           setMuted(event.currentTarget.muted);
         }}
-        onError={() => onFatalRef.current()}
+        onError={(event) => {
+          // with hls.js attached, its ERROR handler owns recovery
+          if (!hlsRef.current) onFatalRef.current(event.currentTarget.currentTime || 0);
+        }}
       >
         {tracks.map((track, index) => (
           <track

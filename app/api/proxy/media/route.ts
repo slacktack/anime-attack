@@ -122,8 +122,47 @@ function isSubtitleUrl(url: string): boolean {
   }
 }
 
+// megavid disguises TS segments as .txt/.jpg/etc, so sniff bytes before treating as text.
+function looksBinaryMedia(chunk: Uint8Array): boolean {
+  if (chunk.length === 0) return false;
+  if (chunk[0] === 0x47) return true;
+  const n = Math.min(chunk.length, 512);
+  for (let i = 0; i < n; i++) if (chunk[i] === 0) return true;
+  return false;
+}
+
 function baseHeaders(contentType: string, extra?: Record<string, string>): Record<string, string> {
   return { ...CORS, "Content-Type": contentType, ...extra };
+}
+
+function originOf(ref: string): Record<string, string> {
+  try {
+    return { Origin: new URL(ref).origin };
+  } catch {
+    return {};
+  }
+}
+
+// megavid drops the odd request under load; one quick retry hides it from the player
+async function fetchWithRetry(url: string, headers: Record<string, string>): Promise<Response> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers,
+        redirect: "follow",
+        cache: "no-store",
+        signal: AbortSignal.timeout(attempt === 0 ? 20_000 : 15_000),
+      });
+      if (res.status < 500 && res.status !== 429) return res;
+      last = res;
+    } catch (error) {
+      last = error;
+    }
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+  }
+  if (last instanceof Response) return last;
+  throw last instanceof Error ? last : new Error("Upstream fetch failed");
 }
 
 export async function GET(request: NextRequest) {
@@ -145,16 +184,12 @@ export async function GET(request: NextRequest) {
   const range = request.headers.get("range");
 
   try {
-    const upstream = await fetch(targetUrl.toString(), {
-      headers: {
-        "User-Agent": UA,
-        Referer: ref,
-        Accept: "*/*",
-        ...(range ? { Range: range } : {}),
-      },
-      redirect: "follow",
-      cache: "no-store",
-      signal: AbortSignal.timeout(25_000),
+    const upstream = await fetchWithRetry(targetUrl.toString(), {
+      "User-Agent": UA,
+      Referer: ref,
+      ...originOf(ref),
+      Accept: "*/*",
+      ...(range ? { Range: range } : {}),
     });
 
     if (!upstream.ok) {
@@ -221,7 +256,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (isSubtitleUrl(targetUrl.toString())) {
+    if (isSubtitleUrl(targetUrl.toString()) && !looksBinaryMedia(firstChunk)) {
       const all = await drain(reader, firstChunk);
       const text = new TextDecoder().decode(all);
       return new NextResponse(toVtt(text), {
