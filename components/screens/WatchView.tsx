@@ -63,6 +63,16 @@ const PROVIDER_LABELS: Record<string, string> = {
   nero: "Nero",
 };
 
+type StreamOption = { audio: Audio; provider: "megavid" | "aniwatch"; minutes: number | null; short: boolean };
+
+function fmtMinutes(m: number | null): string {
+  if (m == null) return "MP4";
+  if (m < 1) return "<1m";
+  const h = Math.floor(m / 60);
+  const r = Math.round(m % 60);
+  return h ? `${h}h ${String(r).padStart(2, "0")}m` : `${Math.round(m)}m`;
+}
+
 function titleFromSlug(slug: string): string {
   const cleaned = slug
     .replace(/-episode-?\d+.*$/i, "")
@@ -98,6 +108,7 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
     initialAudio ?? (/dubbed|english-dub/i.test(slug) ? "dub" : "sub"),
   );
   const [provider, setProvider] = useState<string | null>(null);
+  const [allowShort, setAllowShort] = useState(false);
   const [fullProxy, setFullProxy] = useState(false);
   const [hardError, setHardError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -110,12 +121,13 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   const [recovering, setRecovering] = useState(false);
 
   const stream = useQuery({
-    queryKey: ["stream", slug, malId, episode, audio, provider, refreshTick],
+    queryKey: ["stream", slug, malId, episode, audio, provider, allowShort, refreshTick],
     queryFn: async (): Promise<SourceResponse> => {
       const params = new URLSearchParams({ slug, audio });
       if (malId) params.set("mal", String(malId));
       if (episode) params.set("ep", String(episode));
       if (provider) params.set("provider", provider);
+      if (allowShort) params.set("any", "1");
       // refresh=1 only for the request a Retry triggered
       if (forceRefresh.current) params.set("refresh", "1");
       forceRefresh.current = false;
@@ -140,6 +152,31 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   });
 
   const data = stream.data;
+
+  const optionsMal = malId ?? data?.malId;
+  const optionsEp = episode ?? data?.episode;
+  const options = useQuery({
+    queryKey: ["stream-options", slug, optionsMal, optionsEp],
+    queryFn: async (): Promise<StreamOption[]> => {
+      const params = new URLSearchParams({ slug, mal: String(optionsMal), ep: String(optionsEp) });
+      const res = await fetch(`/api/anime/options?${params.toString()}`);
+      if (!res.ok) return [];
+      return ((await res.json()) as { options?: StreamOption[] }).options ?? [];
+    },
+    enabled: !!optionsMal && !!optionsEp,
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const pickOption = (o: StreamOption) => {
+    setAudio(o.audio);
+    setProvider(o.provider === "aniwatch" ? "aniwatch" : null);
+    setAllowShort(o.short);
+  };
+  const isActiveOption = (o: StreamOption) =>
+    o.audio === audio && (o.provider === "aniwatch") === (provider === "aniwatch");
+  const bestOption = (options.data ?? [])
+    .filter((o) => !o.short && !isActiveOption(o))
+    .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))[0];
   const epNumber = data?.episode ?? episode;
   const effMal = malId ?? (data?.malId && data.malId > 0 ? data.malId : undefined);
 
@@ -220,7 +257,7 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
   useEffect(() => {
     setFullProxy(false);
     setHardError(false);
-  }, [audio, provider, refreshTick]);
+  }, [audio, provider, allowShort, refreshTick]);
 
   useEffect(() => {
     tried.current = new Set();
@@ -364,11 +401,23 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
                 ) : missing ? (
                   <>
                     <AlertTriangle size={32} className="text-accent-crimson" />
-                    <p className="text-[16px] font-semibold text-white">This episode isn&apos;t at the source</p>
+                    <p className="text-[16px] font-semibold text-white">
+                      {/trailer/i.test(data?.message ?? "")
+                        ? "Subbed only has a trailer"
+                        : "This episode isn't at the source"}
+                    </p>
                     {data?.message && <p className="max-w-sm text-[14px] text-white/60">{data.message}</p>}
-                    <button type="button" onClick={retry} className="aa-cta-ghost mt-1">
-                      <RefreshCw size={16} /> Try again
-                    </button>
+                    <div className="mt-1 flex flex-wrap justify-center gap-2">
+                      {bestOption && (
+                        <button type="button" onClick={() => pickOption(bestOption)} className="aa-cta">
+                          <Play size={16} fill="currentColor" /> Play {bestOption.audio === "dub" ? "dubbed" : "subbed"}
+                          {bestOption.minutes != null ? ` · ${fmtMinutes(bestOption.minutes)}` : ""}
+                        </button>
+                      )}
+                      <button type="button" onClick={retry} className="aa-cta-ghost">
+                        <RefreshCw size={16} /> Try again
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -423,7 +472,11 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
                 <button
                   key={a}
                   type="button"
-                  onClick={() => setAudio(a)}
+                  onClick={() => {
+                    setAudio(a);
+                    setProvider(null);
+                    setAllowShort(false);
+                  }}
                   aria-pressed={audio === a}
                   className={`min-h-9 rounded-md px-4 text-[13.5px] font-semibold transition-colors ${
                     audio === a ? "bg-white text-black" : "text-white/65 hover:text-white"
@@ -460,6 +513,37 @@ export function WatchView({ slug, malId, episode, initialAudio }: Props) {
             </button>
           </div>
         </div>
+
+        {(options.data?.length ?? 0) > 0 && (
+          <div className="mt-5">
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">Sources</p>
+            <div className="flex flex-wrap gap-2">
+              {options.data!.map((o) => {
+                const active = isActiveOption(o);
+                return (
+                  <button
+                    key={`${o.provider}-${o.audio}`}
+                    type="button"
+                    onClick={() => pickOption(o)}
+                    aria-pressed={active}
+                    className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-[13px] font-semibold transition-colors ${
+                      active ? "bg-white text-black" : "bg-ink-800 text-white/75 hover:bg-ink-700 hover:text-white"
+                    }`}
+                  >
+                    <span>{o.audio === "dub" ? "Dubbed" : "Subbed"}</span>
+                    {o.provider === "aniwatch" && <span className={active ? "text-black/55" : "text-muted"}>Mirror</span>}
+                    <span className={`tabular-nums ${active ? "text-black/55" : "text-muted"}`}>{fmtMinutes(o.minutes)}</span>
+                    {o.short && (
+                      <span className="rounded bg-accent-gold/20 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-accent-gold">
+                        Trailer
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {!shelf.data?.isMovie && (
           <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">

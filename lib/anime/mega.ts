@@ -136,15 +136,33 @@ async function isValidPlaylist(url: string): Promise<boolean> {
   }
 }
 
+// Total runtime of an HLS stream in minutes (first variant of a master), null if unreadable.
+export async function playlistMinutes(url: string): Promise<number | null> {
+  try {
+    let text = await (await get(url)).text();
+    if (/#EXT-X-STREAM-INF/i.test(text)) {
+      const variant = text.split(/\r?\n/).find((l) => l.trim() && !l.startsWith("#"));
+      if (!variant) return null;
+      text = await (await get(new URL(variant.trim(), url).toString())).text();
+    }
+    let seconds = 0;
+    for (const m of text.matchAll(/#EXTINF:([\d.]+)/g)) seconds += Number(m[1]);
+    return seconds > 0 ? seconds / 60 : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchMegaSource(opts: {
   malId: number;
   episode: number;
   audio: MegaAudio;
   provider?: string;
   refresh?: boolean;
+  minMinutes?: number;
 }): Promise<MegaSource> {
-  const { malId, episode, audio, provider, refresh } = opts;
-  const cacheKey = `${malId}:${episode}:${audio}:${provider ?? "auto"}`;
+  const { malId, episode, audio, provider, refresh, minMinutes } = opts;
+  const cacheKey = `${malId}:${episode}:${audio}:${provider ?? "auto"}:${minMinutes ?? 0}`;
   const cached = sourceCache.get(cacheKey);
   if (!refresh && cached && cached.expires > Date.now()) return cached.value;
 
@@ -183,6 +201,25 @@ export async function fetchMegaSource(opts: {
     if (status === "ok" && raw.source) {
       const valid = await isValidPlaylist(raw.source);
       if (!valid) continue;
+      if (minMinutes && raw.type !== "mp4") {
+        // megavid sometimes serves a trailer in place of a film
+        const minutes = await playlistMinutes(raw.source);
+        if (minutes !== null && minutes < minMinutes) {
+          last = {
+            status: "missing",
+            source: null,
+            type: "hls",
+            tracks: [],
+            providers,
+            provider: id,
+            malId,
+            episode,
+            audio,
+            message: `Only a ${Math.max(1, Math.round(minutes))}-minute trailer is available for this right now, not the full movie.`,
+          };
+          continue;
+        }
+      }
       const value: MegaSource = {
         status: "ok",
         source: raw.source,

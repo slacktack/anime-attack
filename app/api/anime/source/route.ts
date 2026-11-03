@@ -1,26 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { fetchMegaSource, resolveTargetFromSlug, type MegaAudio } from "@/lib/anime/mega";
 import { resolveSlugToMal } from "@/lib/anime/slug-resolve";
-import { extractVideoUrl } from "@/lib/anime/aniwatch";
+import { findMirror, isMovieOnAnilist, minMinutesFor } from "@/lib/anime/stream-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// aniwatch names posts "<series>-episode-<n>-english-subbed"; our links use the AniList title.
-function aniwatchSlugs(slug: string, episode: number, audio: MegaAudio): string[] {
-  const suffix = audio === "dub" ? "dubbed" : "subbed";
-  const out = new Set<string>();
-  if (/-english-(subbed|dubbed)$/i.test(slug)) out.add(slug);
-  const base = slug.replace(/-episode-?\d+.*$/i, "");
-  const bases = new Set([
-    base,
-    base.replace(/-(19|20)\d{2}$/, ""),
-    base.replace(/-season-\d+$/, ""),
-    base.replace(/-(19|20)\d{2}$/, "").replace(/-season-\d+$/, ""),
-  ]);
-  for (const b of bases) if (b) out.add(`${b}-episode-${episode}-english-${suffix}`);
-  return [...out].slice(0, 4);
+function mirrorPayload(url: string, malId: number, episode: number, audio: MegaAudio) {
+  return {
+    status: "ok",
+    type: "mp4",
+    source: url,
+    tracks: [],
+    providers: [],
+    provider: "aniwatch",
+    malId,
+    episode,
+    audio,
+    message: "Playing from the aniwatch mirror (single quality).",
+  };
 }
 
 function noStore(body: unknown, status = 200) {
@@ -36,6 +35,9 @@ export async function GET(request: NextRequest) {
   const audioParam = params.get("audio");
   const provider = params.get("provider") ?? undefined;
   const refresh = params.get("refresh") === "1";
+  const isMovie = params.get("movie") === "1";
+  // the viewer picked a short clip on purpose from the source list
+  const allowShort = params.get("any") === "1";
 
   let malId = Number(params.get("mal")) || null;
   let episode = Number(params.get("ep")) || null;
@@ -75,8 +77,16 @@ export async function GET(request: NextRequest) {
       return noStore({ status: "error", message: "Invalid anime or episode number" }, 400);
     }
 
+    const movie = isMovie || (episode === 1 && (await isMovieOnAnilist(malId)));
+
+    if (provider === "aniwatch") {
+      const url = slug ? await findMirror(slug, episode, audio) : null;
+      if (url) return noStore(mirrorPayload(url, malId, episode, audio));
+      return noStore({ status: "missing", source: null, tracks: [], providers: [], provider: "aniwatch", malId, episode, audio, type: "hls", message: "The backup mirror doesn't have this one." });
+    }
+
     // a throw here means every megavid provider failed; still try the mirror below
-    const result = await fetchMegaSource({ malId, episode, audio, provider, refresh }).catch(
+    const result = await fetchMegaSource({ malId, episode, audio, provider, refresh, minMinutes: allowShort ? undefined : minMinutesFor(movie) }).catch(
       (error: unknown) =>
         ({
           status: "error",
@@ -98,24 +108,8 @@ export async function GET(request: NextRequest) {
     // blogger/JW Player indirection that resolves to a signed Google Video MP4,
     // so use that before giving up. Only possible when we know the episode slug.
     if (slug && (result.status === "missing" || result.status === "error")) {
-      for (const candidate of aniwatchSlugs(slug, episode, audio)) {
-      try {
-        const fallback = await extractVideoUrl(candidate);
-        if (fallback.videoUrl) {
-          return noStore({
-            ...result,
-            status: "ok",
-            type: "mp4",
-            source: fallback.videoUrl,
-            tracks: [],
-            provider: "aniwatch",
-            message: "Playing from the aniwatch mirror (single quality).",
-          });
-        }
-      } catch {
-        /* try the next slug shape */
-      }
-      }
+      const url = await findMirror(slug, episode, audio);
+      if (url) return noStore({ ...mirrorPayload(url, malId, episode, audio), providers: result.providers });
     }
 
     return noStore(result);
