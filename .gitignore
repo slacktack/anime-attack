@@ -48,3 +48,4 @@ keys-tester.js
 .omo
 /.next-dev/
 /.next-ui/
+.env*.local

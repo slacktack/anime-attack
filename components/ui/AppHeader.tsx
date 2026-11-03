@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { NAV_ITEMS, isActive } from "@/components/ui/nav";
 
 function sectionLabel(path: string): string {
@@ -26,12 +27,19 @@ function overlaysMedia(path: string): boolean {
 
 function Wordmark() {
   return (
-    <Link href="/" aria-label="Anime Attack home" className="flex shrink-0 items-center gap-2 rounded-md">
-      <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-accent-purple font-display text-[15px] font-extrabold text-white">
-        A
+    <Link href="/" aria-label="Anime Attack home" className="group flex shrink-0 items-center gap-2.5 rounded-md">
+      <span className="relative grid place-items-center">
+        <span className="absolute inset-0 rounded-[10px] bg-accent-crimson opacity-40 blur-md transition-opacity duration-300 group-hover:opacity-80" />
+        <BrandMark
+          size={34}
+          className="relative transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:-rotate-6"
+        />
       </span>
-      <span className="font-display text-[19px] font-extrabold tracking-[-0.04em] [font-stretch:80%]">
-        anime<span className="text-accent-purple">attack</span>
+      <span className="font-display text-[23px] font-extrabold italic leading-none tracking-[-0.05em] [font-stretch:82%]">
+        anime
+        <span className="bg-gradient-to-r from-accent-crimson to-accent-blue bg-clip-text pr-0.5 text-transparent">
+          attack
+        </span>
       </span>
     </Link>
   );
